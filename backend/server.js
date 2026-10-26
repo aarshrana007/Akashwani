@@ -42,7 +42,10 @@ const now = () => Date.now();
 const COLORS = ['#6264a7', '#c4314b', '#92c353', '#e8912d', '#0d9488', '#7c3aed', '#db2777', '#2563eb'];
 const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
 const sign = (u) => jwt.sign({ id: u.id, name: u.name }, JWT_SECRET, { expiresIn: '30d' });
-const pub = (u) => ({ id: u.id, email: u.email, name: u.name, color: u.color });
+const pub = (u) => ({ id: u.id, email: u.email, name: u.name, color: u.color, bio: u.bio || '', phone: u.phone || '', title: u.title || '', avatar: u.avatar || null });
+const FILES_DIR = path.join(__dirname, 'files'); fs.mkdirSync(FILES_DIR, { recursive: true });
+const safeName = (n) => String(n || 'file').replace(/[^\w.\-() ]+/g, '_').slice(0, 120);
+const extOf = (name, mime) => (path.extname(name || '').slice(1) || (mime || '').split('/')[1] || 'bin').replace(/[^\w]/g, '').slice(0, 8);
 const bad = (res, code, error) => res.status(code).json({ error });
 const auth = (req, res, next) => {
   try { req.user = D.userById.get(jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), JWT_SECRET).id); if (!req.user) throw 0; next(); }
@@ -124,6 +127,36 @@ app.post('/auth/login', (req, res) => {
 app.get('/config', (_req, res) => res.json({ recording: 'browser', cloud: CLOUD }));
 app.use('/api', auth);
 app.get('/api/me', (req, res) => res.json(pub(req.user)));
+app.patch('/api/me', (req, res) => {
+  const { name, bio, phone, title } = req.body || {};
+  if (!name || !name.trim()) return bad(res, 400, 'name required');
+  D.updateProfile.run(name.trim().slice(0, 60), String(bio || '').slice(0, 200), String(phone || '').slice(0, 30), String(title || '').slice(0, 60), req.user.id);
+  io.emit('users:changed'); res.json(pub(D.userById.get(req.user.id)));
+});
+app.post('/api/me/avatar', express.raw({ type: 'image/*', limit: '5mb' }), (req, res) => {
+  if (!req.body?.length) return bad(res, 400, 'image required');
+  const file = `avatars/${req.user.id}-${Date.now().toString(36)}.${extOf('', req.headers['content-type'])}`;
+  fs.mkdirSync(path.join(FILES_DIR, 'avatars'), { recursive: true }); fs.writeFileSync(path.join(FILES_DIR, file), req.body);
+  D.updateAvatar.run('/files/' + file, req.user.id); io.emit('users:changed'); res.json(pub(D.userById.get(req.user.id)));
+});
+app.use('/files', (req, res, next) => (req.path.startsWith('/avatars/') ? next() : auth(req, res, next)), express.static(FILES_DIR));
+
+// ---------- attachments (files, images, voice notes) ----------
+app.post('/api/chats/:id/upload', member, express.raw({ type: '*/*', limit: '100mb' }), (req, res) => {
+  if (!req.body?.length) return bad(res, 400, 'empty');
+  const chatId = +req.params.id, name = safeName(req.query.name), mime = String(req.query.mime || req.headers['content-type'] || 'application/octet-stream').slice(0, 80);
+  const duration = +req.query.duration || null, text = String(req.query.text || '').slice(0, 2000);
+  const file = `chat-${chatId}/${Date.now().toString(36)}-${name}`;
+  fs.mkdirSync(path.join(FILES_DIR, `chat-${chatId}`), { recursive: true }); fs.writeFileSync(path.join(FILES_DIR, file), req.body);
+  const id = D.insertFileMessage.run(chatId, req.user.id, text, now(), '/files/' + file, name, req.body.length, mime, duration).lastInsertRowid;
+  D.setRead.run(id, chatId, req.user.id, id);
+  const m = parseMsg(D.messages.all(chatId, id + 1, 1)[0]);
+  emitChat(chatId, 'message', m);
+  for (const { user_id } of D.memberIds.all(chatId)) if (user_id !== req.user.id) emitUser(user_id, 'chats:changed');
+  res.json(m);
+});
+app.get('/api/chats/:id/files', member, (req, res) => res.json(D.chatFiles.all(+req.params.id)));
+app.get('/api/files', (req, res) => res.json(D.myFiles.all(req.user.id).map(f => ({ ...f, chat_name: f.kind === 'dm' ? 'Direct chat' : f.chat_name }))));
 
 // ---------- users / presence ----------
 const online = new Map(); // userId -> socket count
@@ -133,7 +166,7 @@ app.get('/api/users', (req, res) => res.json(D.allUsers.all().filter(u => u.id !
 function chatSummary(c, me) {
   const members = D.membersOf.all(c.id);
   const other = c.kind === 'dm' ? members.find(m => m.id !== me) : null;
-  return { id: c.id, kind: c.kind, name: c.kind === 'dm' ? (other?.name || 'Direct chat') : c.name, color: other?.color,
+  return { id: c.id, kind: c.kind, name: c.kind === 'dm' ? (other?.name || 'Direct chat') : c.name, color: other?.color, avatar: other?.avatar || null,
     otherId: other?.id, online: other ? online.has(other.id) : undefined, members, unread: c.unread, last: c.last ? JSON.parse(c.last) : null,
     inCall: callers.get(c.id)?.size || 0 };
 }
@@ -236,10 +269,10 @@ io.on('connection', (socket) => {
   socket.on('typing', ({ chatId, typing }) => socket.to(roomName(+chatId)).emit('typing', { chatId: +chatId, userId: me.id, name: me.name, typing }));
 
   // Calls: ring members, track who's in the call
-  socket.on('call:ring', ({ chatId }) => {
+  socket.on('call:ring', ({ chatId, video = true }) => {
     if (!D.isMember.get(+chatId, me.id)) return;
     const c = D.chatById.get(+chatId); const name = c.kind === 'dm' ? me.name : c.name;
-    for (const { user_id } of D.memberIds.all(+chatId)) if (user_id !== me.id && !callers.get(+chatId)?.has(user_id)) emitUser(user_id, 'call:incoming', { chatId: +chatId, from: me.name, fromId: me.id, name, kind: c.kind });
+    for (const { user_id } of D.memberIds.all(+chatId)) if (user_id !== me.id && !callers.get(+chatId)?.has(user_id)) emitUser(user_id, 'call:incoming', { chatId: +chatId, from: me.name, fromId: me.id, name, kind: c.kind, video: !!video, avatar: me.avatar || null, color: me.color });
   });
   socket.on('call:joined', ({ chatId }) => { if (!callers.has(+chatId)) callers.set(+chatId, new Set()); callers.get(+chatId).add(me.id); socket.callChat = +chatId; emitChat(+chatId, 'call:state', { chatId: +chatId, count: callers.get(+chatId).size }); });
   const leave = () => { const c = socket.callChat; if (c == null) return; callers.get(c)?.delete(me.id); if (!callers.get(c)?.size) callers.delete(c); emitChat(c, 'call:state', { chatId: c, count: callers.get(c)?.size || 0 }); socket.callChat = null; };

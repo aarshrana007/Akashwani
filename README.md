@@ -1,5 +1,11 @@
 # Akashwani — chat, video calls and call recording
 
+## What's in v3
+- Akashwani design: navy/saffron/cream, logo, split login with illustration, nav rail (Chat · Teams · Meetings · Files · People), top search bar with notifications
+- Profiles: photo, title, bio, phone (click your avatar) · details panel with About / Files / Linked channels tabs
+- File sharing (paperclip, up to 100 MB) with file cards, inline images, Files section across all chats
+- Voice notes (mic button) with waveform player · emoji picker · audio calls as well as video calls
+
 ## What's in v2
 - Accounts: email + password sign-up/sign-in (JWT), persistent SQLite database (`backend/data.db`)
 - Chats: teams (group) and direct 1:1 chats, People tab with online presence

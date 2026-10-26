@@ -11,8 +11,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=7">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div id="splash"><img src="icon.svg" alt=""><div>Akashwani</div></div>
@@ -21,6 +21,8 @@
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H8l-5 3 1.2-4.4A8 8 0 1 1 21 12z"/></symbol>
   <symbol id="i-teams" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M2.5 19c0-3.5 3-5.5 6.5-5.5s6.5 2 6.5 5.5M17 14c2.5 0 4.5 1.5 4.5 4"/></symbol>
   <symbol id="i-people" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.5-6.5 8-6.5s8 2.5 8 6.5"/></symbol>
+  <symbol id="i-meet" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-files" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
   <symbol id="i-rec" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="3"/><path d="M17 10l4-2.5v9L17 14"/></symbol>
   <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="3"/><path d="M16 10l5-3v10l-5-3"/></symbol>
   <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></symbol>
@@ -37,32 +39,47 @@
   <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3M15 12v2"/></symbol>
   <symbol id="i-out" viewBox="0 0 24 24"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l5 4-5 4M20 12H9"/></symbol>
   <symbol id="i-clip" viewBox="0 0 24 24"><path d="M20 12l-8.5 8.5a5 5 0 0 1-7-7L13 5a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 10h.01M15 10h.01"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM14 3v5h5M8 13h8M8 17h8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
 </defs></svg>
 
 <section id="auth">
+  <img class="mandala m-tr" src="mandala.svg" alt="">
+  <img class="leaves" src="leaves.jpg" alt="">
   <div class="hero">
     <div class="brand"><img src="icon.svg" alt=""><div class="wordmark">Akashwani</div><div class="tag">Connect · Collaborate · Create</div></div>
-    <div class="pic"><img src="hero.svg" alt=""></div>
-    <div class="foot">India's voice, now in your team</div>
+    <div class="pic"><img src="hero.jpg" alt=""></div>
+    <div class="foot">India's voice<br>now in your team<div class="rule"><span></span></div></div>
   </div>
   <div class="formwrap">
     <form onsubmit="return submitAuth(event)">
       <div class="mob-brand"><img src="icon.svg" alt=""><span class="wordmark">Akashwani</span></div>
       <h1 class="welcome"><small>Welcome to</small><b>Akashwani</b></h1>
-      <p class="sub">Your team's space to chat, call, meet and get things done.</p>
-      <h2 id="authTitle">Sign in</h2>
+      <p class="sub">Your team's space to chat,<br>call, meet and get things done.</p>
+      <h2 id="authTitle" class="hidden">Sign in</h2>
       <div class="field hidden" id="nameField"><svg class="i"><use href="#i-user"/></svg><input id="aName" placeholder="Your name" autocomplete="name"></div>
       <div class="field"><svg class="i"><use href="#i-mail"/></svg><input id="aEmail" type="email" placeholder="Email" autocomplete="email" required></div>
-      <div class="field"><svg class="i"><use href="#i-lock"/></svg><input id="aPass" type="password" placeholder="Password" autocomplete="current-password" required minlength="6"></div>
+      <div class="field"><svg class="i"><use href="#i-lock"/></svg><input id="aPass" type="password" placeholder="Password" autocomplete="current-password" required minlength="6"><button type="button" class="eye" onclick="const p=$('aPass');p.type=p.type==='password'?'text':'password'">👁</button></div>
       <div id="codeRow" class="hidden" style="display:flex;gap:8px;align-items:center">
         <div class="field" style="flex:1"><svg class="i"><use href="#i-key"/></svg><input id="aCode" placeholder="6-digit code" inputmode="numeric" maxlength="6"></div>
         <button type="button" class="btn ghost" id="sendCodeBtn" onclick="sendCode()">Send code</button>
       </div>
       <div class="muted small hidden" id="codeHint"></div>
-      <p class="small" id="forgotRow" style="margin:0;text-align:right"><a onclick="setAuthMode('reset')">Forgot password?</a></p>
+      <p class="small" id="forgotRow" style="margin:0;text-align:right"><a onclick="setAuthMode('reset')">Forgot Password?</a></p>
       <div class="err" id="aErr"></div>
-      <button class="btn saffron" id="aBtn">Sign in</button>
-      <p class="muted small center"><span id="aSwitchText">New to Akashwani?</span> <a onclick="setAuthMode(authMode === 'login' ? 'register' : 'login')" id="aSwitch">Create account</a></p>
+      <button class="btn navy big" id="aBtn">Login <svg class="i"><use href="#i-right"/></svg></button>
+      <p class="muted small center"><span id="aSwitchText">New to Akashwani?</span> <a onclick="setAuthMode(authMode === 'login' ? 'register' : 'login')" id="aSwitch">Create Account</a></p>
     </form>
   </div>
 </section>
@@ -72,65 +89,93 @@
     <div class="logo"><img src="icon.svg" alt=""><span class="wordmark">Akashwani</span></div>
     <button data-nav="chats" class="on" onclick="setNav('chats')"><svg class="i"><use href="#i-chat"/></svg>Chat<span class="badge hidden" id="railUnread"></span></button>
     <button data-nav="teams" onclick="setNav('teams')"><svg class="i"><use href="#i-teams"/></svg>Teams</button>
+    <button data-nav="meetings" onclick="setNav('meetings')"><svg class="i"><use href="#i-meet"/></svg>Meetings</button>
+    <button data-nav="files" onclick="setNav('files')"><svg class="i"><use href="#i-files"/></svg>Files</button>
     <button data-nav="people" onclick="setNav('people')"><svg class="i"><use href="#i-people"/></svg>People</button>
-    <button data-nav="recordings" onclick="setNav('recordings')"><svg class="i"><use href="#i-rec"/></svg>Recordings</button>
-    <div class="spacer"></div>
-    <button class="meBtn" title="Sign out" onclick="logout()"><div class="avatar" id="meAvatar"></div></button>
+    <div class="art"><img src="rail-art.jpg" alt=""></div>
+    <button class="meRow" onclick="openProfile()"><div class="avatar" id="meAvatar"></div><span id="meNameRail"></span><svg class="i"><use href="#i-right"/></svg></button>
   </nav>
 
-  <div id="side">
-    <div class="top"><h1 id="sideTitle">Chat</h1><button class="ib" title="New chat or team" onclick="openNew()"><svg class="i"><use href="#i-edit"/></svg></button></div>
-    <div class="search"><svg class="i"><use href="#i-search"/></svg><input id="sideSearch" placeholder="Search conversations…" oninput="renderChats();renderPeople()"></div>
-    <div class="chips" id="chips"><button class="on" onclick="setFilter('all',this)">All</button><button onclick="setFilter('unread',this)">Unread <span class="badge hidden" id="chipUnread"></span></button><button onclick="setFilter('groups',this)">Groups</button></div>
-    <div class="list" id="chatList"></div>
-    <div class="list hidden" id="peopleList"></div>
-    <div class="me"><div class="avatar" id="meAvatar2"></div><div class="grow"><div id="meName" style="font-weight:700;color:var(--navy)"></div><div class="muted small" id="meEmail"></div></div><button class="ib" title="Sign out" onclick="logout()"><svg class="i"><use href="#i-out"/></svg></button></div>
-  </div>
+  <div id="shell">
+    <header id="topbar">
+      <div class="tagline"><img src="icon.svg" alt=""><span>Better Conversations</span><i>✦</i><span>Greater Ideas</span><i>✦</i><b>Akashwani</b></div>
+      <div class="gsearch"><svg class="i"><use href="#i-search"/></svg><input id="gSearch" placeholder="Search in Akashwani…" oninput="globalSearch(this.value)"><div id="gResults" class="hidden"></div></div>
+      <button class="ib" title="Notifications" onclick="setNav('chats');setFilter('unread',document.querySelector('#chips button:nth-child(2)'))"><svg class="i"><use href="#i-bell"/></svg><span class="badge hidden" id="bellUnread"></span></button>
+      <button class="avatarBtn" onclick="openProfile()"><div class="avatar" id="meAvatarTop"></div></button>
+    </header>
 
-  <div id="main">
-    <div class="empty" id="mainEmpty"><div><div class="wordmark" style="font-size:28px;color:var(--navy);margin-bottom:6px">Akashwani</div>Pick a conversation, or start a new one.</div></div>
-    <div id="chatView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div class="top">
-        <button class="ib" onclick="closeChat()"><svg class="i"><use href="#i-back"/></svg></button>
-        <div class="chathead" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0" onclick="togglePanel()">
-          <div class="avatar" id="chatAvatar"></div>
-          <div class="grow" style="min-width:0"><h1 id="chatTitle"></h1><div class="muted small" id="chatSub"></div></div>
+    <div id="cols">
+      <div id="side">
+        <div class="top"><h1 id="sideTitle">Chat</h1><button class="ib" title="New chat or team" onclick="openNew()"><svg class="i"><use href="#i-edit"/></svg></button></div>
+        <div class="search"><svg class="i"><use href="#i-search"/></svg><input id="sideSearch" placeholder="Search conversations…" oninput="renderChats();renderPeople()"></div>
+        <div class="chips" id="chips"><button class="on" onclick="setFilter('all',this)">All</button><button onclick="setFilter('unread',this)">Unread <span class="badge hidden" id="chipUnread"></span></button><button onclick="setFilter('groups',this)">Groups</button></div>
+        <div class="list" id="chatList"></div>
+        <div class="list hidden" id="peopleList"></div>
+        <div class="list hidden" id="meetList"></div>
+        <div class="list hidden" id="fileList"></div>
+        <div class="me"><div class="avatar" id="meAvatar2"></div><div class="grow"><div id="meName" style="font-weight:700;color:var(--navy)"></div><div class="muted small" id="meEmail"></div></div><button class="ib" title="Sign out" onclick="logout()"><svg class="i"><use href="#i-out"/></svg></button></div>
+      </div>
+
+      <div id="main">
+        <img class="mandala m-chat" src="mandala.svg" alt="">
+        <div class="empty" id="mainEmpty"><div><div class="wordmark" style="font-size:30px;color:var(--navy);margin-bottom:6px">Akashwani</div>Pick a conversation, or start a new one.</div></div>
+        <div id="chatView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div class="top">
+            <button class="ib backBtn" onclick="closeChat()"><svg class="i"><use href="#i-back"/></svg></button>
+            <div class="chathead" onclick="togglePanel()">
+              <div class="avatar" id="chatAvatar"></div>
+              <div class="grow" style="min-width:0"><h1 id="chatTitle"></h1><div class="muted small" id="chatSub"></div></div>
+            </div>
+            <button class="ib" title="Audio call" onclick="startCall(cur.id, true, false)"><svg class="i"><use href="#i-phone"/></svg></button>
+            <button class="ib" id="addMemberBtn" title="Add people" onclick="openAddMember()"><svg class="i"><use href="#i-adduser"/></svg></button>
+            <button class="ib" title="Video call" onclick="startCall(cur.id, true, true)"><svg class="i"><use href="#i-video"/></svg></button>
+            <button class="ib" title="Details" onclick="togglePanel()"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+          <div id="msgs"></div>
+          <div id="typing"></div>
+          <div id="editbar"><span>Editing message</span><button onclick="cancelEdit()">Cancel</button></div>
+          <div id="recbar" class="hidden"><span class="dot"></span><span id="recTime">0:00</span><span class="muted small">Recording voice note… tap ■ to send, ✕ to cancel</span><button onclick="voice.cancel()">✕</button><button class="stop" onclick="voice.stop()">■</button></div>
+          <div class="composer">
+            <button class="ib" title="New" onclick="openNew()"><svg class="i"><use href="#i-plus"/></svg></button>
+            <button class="ib" title="Attach file" onclick="$('fileIn').click()"><svg class="i"><use href="#i-clip"/></svg></button>
+            <input type="file" id="fileIn" class="hidden" multiple onchange="sendFiles(this.files);this.value=''">
+            <button class="ib" id="voiceBtn" title="Voice note" onclick="voice.toggle()"><svg class="i"><use href="#i-mic"/></svg></button>
+            <div class="inputwrap"><textarea id="msgIn" rows="1" placeholder="Type a message…"></textarea><button class="ib emojiBtn" onclick="toggleEmoji()"><svg class="i"><use href="#i-smile"/></svg></button><div id="emojiPick" class="hidden"></div></div>
+            <button class="btn saffron sendBtn" onclick="send()"><svg class="i"><use href="#i-mail"/></svg></button>
+          </div>
         </div>
-        <button class="ib" id="addMemberBtn" title="Add people" onclick="openAddMember()"><svg class="i"><use href="#i-adduser"/></svg></button>
-        <button class="ib" title="Video call" onclick="startCall(cur.id, true)"><svg class="i"><use href="#i-video"/></svg></button>
+        <div id="recView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div class="top"><button class="ib backBtn" onclick="closeChat()"><svg class="i"><use href="#i-back"/></svg></button><h1>Recordings</h1></div>
+          <div class="list" id="recList"></div>
+        </div>
       </div>
-      <div id="msgs"></div>
-      <div id="typing"></div>
-      <div id="editbar"><span>Editing message</span><button onclick="cancelEdit()">Cancel</button></div>
-      <div class="composer">
-        <button class="ib" title="Attach (coming soon)" onclick="toast('File sharing is coming soon')"><svg class="i"><use href="#i-clip"/></svg></button>
-        <textarea id="msgIn" rows="1" placeholder="Type a message…"></textarea>
-        <button class="btn saffron" onclick="send()"><svg class="i"><use href="#i-send"/></svg></button>
-      </div>
-    </div>
-    <div id="recView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
-      <div class="top"><button class="ib" onclick="closeChat()"><svg class="i"><use href="#i-back"/></svg></button><h1>Recordings</h1></div>
-      <div class="list" id="recList"></div>
+
+      <aside id="panel">
+        <div class="ph"><div class="avatar" id="pAvatar"></div><div class="grow" style="min-width:0"><div class="pname" id="pName"></div><div class="muted small" id="pSub"></div></div><button class="ib" onclick="togglePanel(false)"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <div class="ptabs"><button class="on" onclick="setPanelTab('about',this)">About</button><button onclick="setPanelTab('files',this)">Files</button><button onclick="setPanelTab('links',this)">Linked channels</button></div>
+        <div class="pbody" id="pAbout">
+          <div class="card2" id="pProfileCard"><h4>Profile <button class="ib small-ib hidden" id="pEditBtn" onclick="openProfile()"><svg class="i"><use href="#i-edit"/></svg></button></h4><div id="pProfile"></div></div>
+          <div class="card2" id="pMembersCard"><h4 id="pMembersTitle">Members</h4><div id="pMembers"></div></div>
+          <div class="card2"><h4>Shared files</h4><div id="pFilesShort"></div></div>
+          <div class="card2"><h4>More actions</h4>
+            <button class="action" onclick="startCall(cur.id, true, false)"><svg class="i"><use href="#i-phone"/></svg>Start a call</button>
+            <button class="action" onclick="startCall(cur.id, true, true)"><svg class="i"><use href="#i-video"/></svg>Start a video call</button>
+            <button class="action" id="pAddBtn" onclick="openAddMember()"><svg class="i"><use href="#i-adduser"/></svg>Add people</button>
+            <button class="action" onclick="setNav('recordings')"><svg class="i"><use href="#i-rec"/></svg>Recordings</button>
+          </div>
+        </div>
+        <div class="pbody hidden" id="pFiles"></div>
+        <div class="pbody hidden" id="pLinks"></div>
+      </aside>
     </div>
   </div>
-
-  <aside id="panel">
-    <div class="ph"><div class="avatar" id="pAvatar"></div><div class="grow" style="min-width:0"><div class="pname" id="pName"></div><div class="muted small" id="pSub"></div></div><button class="ib" onclick="togglePanel(false)"><svg class="i"><use href="#i-x"/></svg></button></div>
-    <div class="pbody">
-      <div class="card2"><h4>Actions</h4>
-        <button class="action" onclick="startCall(cur.id, true)"><svg class="i"><use href="#i-video"/></svg>Start a video call</button>
-        <button class="action" id="pAddBtn" onclick="openAddMember()"><svg class="i"><use href="#i-adduser"/></svg>Add people</button>
-        <button class="action" onclick="setNav('recordings')"><svg class="i"><use href="#i-rec"/></svg>Recordings</button>
-      </div>
-      <div class="card2" id="pMembersCard"><h4 id="pMembersTitle">Members</h4><div id="pMembers"></div></div>
-    </div>
-  </aside>
 
   <nav id="bottomnav">
     <button data-nav="chats" class="on" onclick="setNav('chats')"><svg class="i"><use href="#i-chat"/></svg>Chat<span class="badge hidden" id="navUnread"></span></button>
     <button data-nav="teams" onclick="setNav('teams')"><svg class="i"><use href="#i-teams"/></svg>Teams</button>
+    <button data-nav="meetings" onclick="setNav('meetings')"><svg class="i"><use href="#i-meet"/></svg>Meet</button>
+    <button data-nav="files" onclick="setNav('files')"><svg class="i"><use href="#i-files"/></svg>Files</button>
     <button data-nav="people" onclick="setNav('people')"><svg class="i"><use href="#i-people"/></svg>People</button>
-    <button data-nav="recordings" onclick="setNav('recordings')"><svg class="i"><use href="#i-rec"/></svg>Recordings</button>
   </nav>
 </section>
 
@@ -168,6 +213,17 @@
   <div class="actions"><button class="btn ghost" onclick="closeDlg('memberDlg')">Cancel</button><button class="btn" onclick="addMembers()">Add</button></div>
 </div></div>
 
+<div class="overlay" id="profileDlg"><div class="card">
+  <h3>Your profile</h3>
+  <div style="display:flex;align-items:center;gap:14px"><div class="avatar" id="profAvatar" style="width:72px;height:72px;font-size:26px"></div><div><button class="btn ghost" onclick="$('avatarIn').click()"><svg class="i"><use href="#i-camera"/></svg> Change photo</button><input type="file" id="avatarIn" class="hidden" accept="image/*" onchange="uploadAvatar(this.files[0]);this.value=''"></div></div>
+  <input id="profName" placeholder="Name">
+  <input id="profTitle" placeholder="Title (e.g. Data Engineer)">
+  <textarea id="profBio" rows="2" placeholder="A line about you"></textarea>
+  <input id="profPhone" placeholder="Phone (optional)" inputmode="tel">
+  <div class="muted small" id="profEmail"></div>
+  <div class="actions"><button class="btn ghost" onclick="logout()">Sign out</button><button class="btn ghost" onclick="closeDlg('profileDlg')">Cancel</button><button class="btn" onclick="saveProfile()">Save</button></div>
+</div></div>
+
 <div class="overlay" id="recDlg"><div class="card">
   <h3>Start recording</h3>
   <div class="muted small">Everyone in the call will be told that recording has started.</div>
@@ -177,10 +233,12 @@
   <div class="actions"><button class="btn ghost" onclick="closeDlg('recDlg')">Cancel</button><button class="btn danger" onclick="confirmRec()">⏺ Start</button></div>
 </div></div>
 
+<div class="overlay" id="imgView" onclick="this.classList.remove('on')"><img id="imgViewImg" alt="" style="max-width:95vw;max-height:90vh;border-radius:12px"></div>
+
 <div id="player"><video id="pv" controls playsinline autoplay></video><button onclick="closePlayer()">Close</button></div>
 
 <script src="livekit-client.umd.js"></script>
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
