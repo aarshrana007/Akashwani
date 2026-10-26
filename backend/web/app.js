@@ -26,12 +26,12 @@ let authMode = 'login'; // 'login' | 'register' | 'reset'
 const registering = () => authMode === 'register';
 function setAuthMode(mode) {
   authMode = mode; const reg = mode === 'register', reset = mode === 'reset';
-  $('aName').classList.toggle('hidden', !reg); $('aName').required = reg;
+  $('nameField').classList.toggle('hidden', !reg); $('aName').required = reg;
   $('codeRow').classList.toggle('hidden', !reg && !reset); $('aCode').required = reg || reset; $('codeHint').classList.add('hidden'); $('aCode').value = '';
   $('aPass').placeholder = reset ? 'New password' : 'Password'; $('aPass').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   $('authTitle').textContent = { login: 'Sign in', register: 'Create account', reset: 'Reset password' }[mode];
   $('aBtn').textContent = { login: 'Sign in', register: 'Create account', reset: 'Set new password' }[mode];
-  $('aSwitchText').textContent = mode === 'login' ? 'New here?' : 'Back to'; $('aSwitch').textContent = mode === 'login' ? 'Create an account' : 'Sign in';
+  $('aSwitchText').textContent = mode === 'login' ? 'New to Akashwani?' : 'Back to'; $('aSwitch').textContent = mode === 'login' ? 'Create account' : 'Sign in';
   $('aSwitch').onclick = () => setAuthMode(mode === 'login' ? 'register' : 'login');
   $('forgotRow').classList.toggle('hidden', mode !== 'login'); $('aErr').textContent = '';
 }
@@ -64,7 +64,7 @@ function logout() { localStorage.removeItem('token'); localStorage.removeItem('m
 // ---------- boot ----------
 async function boot() {
   $('auth').classList.add('hidden'); $('app').classList.remove('hidden');
-  $('meAvatar').outerHTML = avatarHtml(me.name, me.color).replace('class="avatar"', 'class="avatar" id="meAvatar"'); $('meName').textContent = me.name; $('meEmail').textContent = me.email;
+  $('meAvatar').outerHTML = avatarHtml(me.name, me.color).replace('class="avatar"', 'class="avatar" id="meAvatar"'); $('meAvatar2').outerHTML = avatarHtml(me.name, me.color).replace('class="avatar"', 'class="avatar" id="meAvatar2"'); $('meName').textContent = me.name; $('meEmail').textContent = me.email;
   connectSocket();
   await Promise.all([loadChats(), loadPeople()]);
   api('/config').then(c => { if (!c.recording) $('recBtn').classList.add('hidden'); });
@@ -97,20 +97,41 @@ function notify(c, m) {
 }
 
 // ---------- lists ----------
-function setTab(t, btn) { tab = t; document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b === btn)); $('chatList').classList.toggle('hidden', t !== 'chats'); $('peopleList').classList.toggle('hidden', t !== 'people'); }
+let nav = 'chats', filter = 'all';
+function setNav(n) {
+  nav = n; document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === n));
+  if (n === 'recordings') return openRecordings();
+  if (document.body.classList.contains('inchat') && !cur) closeChat();
+  $('sideTitle').textContent = { chats: 'Chat', teams: 'Teams', people: 'People' }[n];
+  $('chatList').classList.toggle('hidden', n === 'people'); $('peopleList').classList.toggle('hidden', n !== 'people'); $('chips').classList.toggle('hidden', n !== 'chats');
+  $('sideSearch').placeholder = n === 'people' ? 'Search people…' : 'Search conversations…';
+  if (n === 'people') renderPeople(); else renderChats();
+  if (window.innerWidth < 800) { document.body.classList.remove('inchat'); }
+}
+function setFilter(f, btn) { filter = f; document.querySelectorAll('#chips button').forEach(b => b.classList.toggle('on', b === btn)); renderChats(); }
+function updateUnread() { const n = chats.reduce((a, c) => a + (c.unread || 0), 0); ['railUnread', 'navUnread', 'chipUnread'].forEach(id => { const e = $(id); if (!e) return; e.textContent = n; e.classList.toggle('hidden', !n); }); }
 async function loadChats() { chats = await api('/api/chats'); renderChats(); }
 async function loadPeople() { people = await api('/api/users'); renderPeople(); }
 function renderChats() {
-  $('chatList').innerHTML = chats.length ? chats.map(c => `
+  updateUnread();
+  const q = ($('sideSearch')?.value || '').trim().toLowerCase();
+  let list = chats;
+  if (nav === 'teams') list = list.filter(c => c.kind === 'team');
+  if (filter === 'unread') list = list.filter(c => c.unread > 0);
+  if (filter === 'groups') list = list.filter(c => c.kind === 'team');
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q) || (c.last?.text || '').toLowerCase().includes(q));
+  $('chatList').innerHTML = list.length ? list.map(c => `
     <div class="row${cur?.id === c.id ? ' on' : ''}" onclick="openChat(${c.id})">
       ${avatarHtml(c.name, c.color, { sq: c.kind === 'team', online: c.kind === 'dm' ? c.online : undefined })}
-      <div class="grow"><div class="name">${esc(c.name)}${c.inCall ? ' <span class="badge" style="background:var(--ok)">📹 ' + c.inCall + '</span>' : ''}</div>
+      <div class="grow"><div class="name">${esc(c.name)}${c.inCall ? ' <span class="badge" style="background:var(--ok)">● ' + c.inCall + ' in call</span>' : ''}</div>
         <div class="sub">${c.last ? (c.last.deleted ? '<i>message deleted</i>' : esc((c.last.user_id === me.id ? 'You: ' : '') + c.last.text)) : (c.kind === 'team' ? c.members.length + ' members' : 'Say hi')}</div></div>
       <div class="meta">${c.last ? fmtTime(c.last.ts) : ''}${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</div>
-    </div>`).join('') : '<div class="empty">No chats yet.<br>Tap ✏️ to start one.</div>';
+    </div>`).join('') : `<div class="empty">${chats.length ? 'Nothing matches.' : (nav === 'teams' ? 'No teams yet.<br>Tap the pencil to create one.' : 'No chats yet.<br>Tap the pencil to start one.')}</div>`;
 }
 function renderPeople() {
-  $('peopleList').innerHTML = people.length ? people.map(p => `
+  const q = ($('sideSearch')?.value || '').trim().toLowerCase();
+  const list = q ? people.filter(p => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) : people;
+  $('peopleList').innerHTML = list.length ? list.map(p => `
     <div class="row" onclick="openDm(${p.id})">${avatarHtml(p.name, p.color, { online: p.online })}
       <div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${p.online ? '<span style="color:var(--ok)">● Available</span>' : 'Offline'} · ${esc(p.email)}</div></div></div>`).join('')
     : '<div class="empty">Nobody else has signed up yet.<br>Share your link!</div>';
@@ -121,18 +142,34 @@ async function openDm(userId) { const c = await api('/api/chats/dm', { method: '
 async function openChat(id) {
   cur = chats.find(c => c.id === id); if (!cur) return;
   document.body.classList.add('inchat'); $('mainEmpty').classList.add('hidden'); $('recView').classList.add('hidden'); $('chatView').classList.remove('hidden');
-  socket.emit('join', id); typers = {}; renderTyping(); cancelEdit();
+  socket.emit('join', id); typers = {}; renderTyping(); cancelEdit(); if (window.innerWidth < 800) togglePanel(false);
   refreshHeader(); renderChats();
   msgs = await api(`/api/chats/${id}/messages`); renderMsgs(true); markRead();
 }
-function closeChat() { document.body.classList.remove('inchat'); cur = null; $('chatView').classList.add('hidden'); $('recView').classList.add('hidden'); $('mainEmpty').classList.remove('hidden'); renderChats(); }
+function togglePanel(force) {
+  const on = force === undefined ? !$('panel').classList.contains('on') : force;
+  $('panel').classList.toggle('on', on); if (on) renderPanel();
+}
+function renderPanel() {
+  if (!cur) return; const c = cur;
+  $('pAvatar').outerHTML = avatarHtml(c.name, c.color, { sq: c.kind === 'team', online: c.kind === 'dm' ? c.online : undefined }).replace('class="avatar', 'id="pAvatar" class="avatar').replace('width:38px', '');
+  $('pAvatar').style.width = $('pAvatar').style.height = '56px'; $('pAvatar').style.fontSize = '20px';
+  $('pName').textContent = c.name;
+  const other = c.kind === 'dm' ? c.members.find(m => m.id !== me.id) : null;
+  $('pSub').textContent = c.kind === 'dm' ? `${other?.email || ''} · ${c.online ? 'Available' : 'Offline'}` : `${c.members.length} members`;
+  $('pAddBtn').classList.toggle('hidden', c.kind !== 'team');
+  $('pMembersTitle').textContent = c.kind === 'team' ? `Members (${c.members.length})` : 'About';
+  $('pMembers').innerHTML = c.members.map(m => `<div class="mrow">${avatarHtml(m.name, m.color, { online: m.id === me.id ? true : (people.find(p => p.id === m.id)?.online) })}<div class="grow"><div style="font-weight:600">${esc(m.name)}${m.id === me.id ? ' (you)' : ''}</div><div class="muted small">${esc(m.email)}</div></div></div>`).join('');
+}
+function closeChat() { togglePanel(false); document.body.classList.remove('inchat'); cur = null; $('chatView').classList.add('hidden'); $('recView').classList.add('hidden'); $('mainEmpty').classList.remove('hidden'); if (nav === 'recordings') { nav = 'chats'; document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === 'chats')); } renderChats(); }
 function refreshHeader() {
   const c = chats.find(x => x.id === cur.id) || cur; cur = c;
   $('chatAvatar').outerHTML = avatarHtml(c.name, c.color, { sq: c.kind === 'team', online: c.kind === 'dm' ? c.online : undefined }).replace('class="avatar', 'id="chatAvatar" class="avatar');
   $('chatTitle').textContent = c.name;
   $('chatSub').textContent = c.kind === 'dm' ? (c.online ? 'Available' : 'Offline') : c.members.map(m => m.name).join(', ');
   $('addMemberBtn').classList.toggle('hidden', c.kind !== 'team');
-  if (c.inCall) $('chatSub').textContent = `📹 ${c.inCall} in call · ` + $('chatSub').textContent;
+  if (c.inCall) $('chatSub').textContent = `● ${c.inCall} in call · ` + $('chatSub').textContent;
+  if ($('panel').classList.contains('on')) renderPanel();
 }
 function renderMsgs(scrollHard) {
   const el = $('msgs'); const atBottom = scrollHard || el.scrollTop + el.clientHeight >= el.scrollHeight - 80;
@@ -352,10 +389,10 @@ const browserRec = (() => {
 
 // ---------- recordings ----------
 async function openRecordings() {
-  document.body.classList.add('inchat'); $('mainEmpty').classList.add('hidden'); $('chatView').classList.add('hidden'); $('recView').classList.remove('hidden'); cur = null; renderChats();
+  document.body.classList.add('inchat'); $('mainEmpty').classList.add('hidden'); $('chatView').classList.add('hidden'); $('recView').classList.remove('hidden'); togglePanel(false); cur = null; renderChats();
   const recs = await api('/api/recordings');
   $('recList').innerHTML = recs.length ? recs.map(r => `
-    <div class="row" onclick="play('${r.url}?token=${token}')"><div class="avatar sq" style="background:var(--panel2)">🎞</div>
+    <div class="row" onclick="play('${r.url}?token=${token}')"><div class="avatar sq" style="background:var(--navy)"><svg class="i"><use href="#i-rec"/></svg></div>
       <div class="grow"><div class="name">${esc(r.chat_name)}</div><div class="sub">${new Date(r.started).toLocaleString()} · by ${esc(r.user_name)} · ${Math.max(1, Math.round((r.ended - r.started) / 60000))} min</div></div><div class="meta">▶</div></div>`).join('')
     : '<div class="empty">No recordings yet. Start one from a call with ⏺.</div>';
 }
