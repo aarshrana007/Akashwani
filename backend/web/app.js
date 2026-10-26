@@ -22,19 +22,24 @@ async function api(path, { method = 'GET', body, raw } = {}) {
 }
 
 // ---------- auth ----------
-let registering = false;
-function toggleAuth() {
-  registering = !registering;
-  $('aName').classList.toggle('hidden', !registering); $('aName').required = registering;
-  $('codeRow').classList.toggle('hidden', !registering); $('aCode').required = registering; $('codeHint').classList.add('hidden');
-  $('authTitle').textContent = registering ? 'Create account' : 'Sign in'; $('aBtn').textContent = registering ? 'Create account' : 'Sign in';
-  $('aSwitchText').textContent = registering ? 'Already have an account?' : 'New here?'; $('aSwitch').textContent = registering ? 'Sign in' : 'Create an account';
-  $('aErr').textContent = '';
+let authMode = 'login'; // 'login' | 'register' | 'reset'
+const registering = () => authMode === 'register';
+function setAuthMode(mode) {
+  authMode = mode; const reg = mode === 'register', reset = mode === 'reset';
+  $('aName').classList.toggle('hidden', !reg); $('aName').required = reg;
+  $('codeRow').classList.toggle('hidden', !reg && !reset); $('aCode').required = reg || reset; $('codeHint').classList.add('hidden'); $('aCode').value = '';
+  $('aPass').placeholder = reset ? 'New password' : 'Password'; $('aPass').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+  $('authTitle').textContent = { login: 'Sign in', register: 'Create account', reset: 'Reset password' }[mode];
+  $('aBtn').textContent = { login: 'Sign in', register: 'Create account', reset: 'Set new password' }[mode];
+  $('aSwitchText').textContent = mode === 'login' ? 'New here?' : 'Back to'; $('aSwitch').textContent = mode === 'login' ? 'Create an account' : 'Sign in';
+  $('aSwitch').onclick = () => setAuthMode(mode === 'login' ? 'register' : 'login');
+  $('forgotRow').classList.toggle('hidden', mode !== 'login'); $('aErr').textContent = '';
 }
+function toggleAuth() { setAuthMode(authMode === 'login' ? 'register' : 'login'); }
 async function submitAuth(e) {
   e.preventDefault(); $('aErr').textContent = ''; $('aBtn').disabled = true;
   try {
-    const r = await fetch(registering ? '/auth/register' : '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
+    const r = await fetch({ login: '/auth/login', register: '/auth/register', reset: '/auth/reset' }[authMode], { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
       body: JSON.stringify({ email: $('aEmail').value.trim(), password: $('aPass').value, name: $('aName').value.trim(), code: $('aCode').value.trim() }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     token = j.token; me = j.user; localStorage.setItem('token', token); localStorage.setItem('me', JSON.stringify(me));
@@ -47,7 +52,7 @@ async function sendCode() {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return $('aErr').textContent = 'Enter a valid email address first';
   $('sendCodeBtn').disabled = true;
   try {
-    const r = await fetch('/auth/send-code', { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify({ email }) });
+    const r = await fetch('/auth/send-code', { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify({ email, purpose: authMode === 'reset' ? 'reset' : 'register' }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     $('codeHint').textContent = j.sent ? `Code sent to ${email} — check your inbox (and spam).` : 'Email sending is not configured: the code is shown in the backend window on the laptop.';
     $('codeHint').classList.remove('hidden'); $('aCode').focus();

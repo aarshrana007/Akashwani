@@ -37,6 +37,7 @@ module.exports = {
   // users
   insertUser: q('INSERT INTO users (email,name,pass_hash,salt,color,created) VALUES (?,?,?,?,?,?)'),
   userByEmail: q('SELECT * FROM users WHERE email = ?'),
+  updatePassword: q('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?'),
   userById: q('SELECT id,email,name,color FROM users WHERE id = ?'),
   allUsers: q('SELECT id,email,name,color FROM users ORDER BY name'),
   // chats

@@ -30,7 +30,8 @@
     <div class="muted small hidden" id="codeHint"></div>
     <div class="err" id="aErr"></div>
     <button class="btn" id="aBtn">Sign in</button>
-    <p class="muted small center"><span id="aSwitchText">New here?</span> <a onclick="toggleAuth()" id="aSwitch">Create an account</a></p>
+    <p class="muted small center"><span id="aSwitchText">New here?</span> <a onclick="setAuthMode(authMode === 'login' ? 'register' : 'login')" id="aSwitch">Create an account</a></p>
+    <p class="muted small center" id="forgotRow"><a onclick="setAuthMode('reset')">Forgot password?</a></p>
   </form>
 </section>
 
@@ -111,6 +112,6 @@
 
 <script src="livekit-client.umd.js"></script>
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

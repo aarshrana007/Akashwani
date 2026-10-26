@@ -64,10 +64,13 @@ const pendingCodes = new Map(); // email -> { code, exp, tries }
 const EMAIL_RE = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
 app.post('/auth/send-code', async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
+  const purpose = req.body?.purpose === 'reset' ? 'reset' : 'register';
   if (!EMAIL_RE.test(email)) return bad(res, 400, 'enter a valid email address');
-  if (D.userByEmail.get(email)) return bad(res, 409, 'email already registered — sign in instead');
+  const exists = !!D.userByEmail.get(email);
+  if (purpose === 'register' && exists) return bad(res, 409, 'email already registered — sign in instead');
+  if (purpose === 'reset' && !exists) return bad(res, 404, 'no account with that email');
   const code = String(crypto.randomInt(100000, 999999));
-  pendingCodes.set(email, { code, exp: now() + 10 * 60 * 1000, tries: 0 });
+  pendingCodes.set(purpose + ':' + email, { code, exp: now() + 10 * 60 * 1000, tries: 0 });
   if (mailer) {
     try { await mailer.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to: email, subject: `${process.env.APP_NAME || 'Akashwani'} verification code: ${code}`, text: `Your verification code is ${code}. It expires in 10 minutes.` }); }
     catch (e) { console.error('mail failed:', e.message); return bad(res, 500, 'could not send email: ' + e.message); }
@@ -78,17 +81,33 @@ app.post('/auth/send-code', async (req, res) => {
   }
 });
 
+function checkCode(purpose, email, code) {
+  const key = purpose + ':' + email, pc = pendingCodes.get(key);
+  if (!pc || pc.exp < now()) return 'request a verification code first';
+  if (++pc.tries > 5) { pendingCodes.delete(key); return 'too many attempts — request a new code'; }
+  if (String(code || '').trim() !== pc.code) return 'wrong verification code';
+  pendingCodes.delete(key); return null;
+}
+
+app.post('/auth/reset', (req, res) => {
+  const { email: rawEmail, password, code } = req.body || {};
+  const email = String(rawEmail || '').trim().toLowerCase();
+  const u = D.userByEmail.get(email); if (!u) return bad(res, 404, 'no account with that email');
+  if (!password || password.length < 6) return bad(res, 400, 'new password must be 6+ characters');
+  const err = checkCode('reset', email, code); if (err) return bad(res, 400, err);
+  const salt = crypto.randomBytes(16).toString('hex');
+  D.updatePassword.run(hash(password, salt), salt, u.id);
+  const fresh = D.userById.get(u.id);
+  res.json({ token: sign(fresh), user: pub(fresh) });
+});
+
 app.post('/auth/register', (req, res) => {
   const { email: rawEmail, name, password, code } = req.body || {};
   const email = String(rawEmail || '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return bad(res, 400, 'enter a valid email address');
   if (!name || !password || password.length < 6) return bad(res, 400, 'name and a 6+ char password required');
   if (D.userByEmail.get(email)) return bad(res, 409, 'email already registered');
-  const pc = pendingCodes.get(email);
-  if (!pc || pc.exp < now()) return bad(res, 400, 'request a verification code first');
-  if (++pc.tries > 5) { pendingCodes.delete(email); return bad(res, 400, 'too many attempts — request a new code'); }
-  if (String(code || '').trim() !== pc.code) return bad(res, 400, 'wrong verification code');
-  pendingCodes.delete(email);
+  const err = checkCode('register', email, code); if (err) return bad(res, 400, err);
   const salt = crypto.randomBytes(16).toString('hex');
   const r = D.insertUser.run(email, name.trim(), hash(password, salt), salt, COLORS[Math.floor(Math.random() * COLORS.length)], now());
   const u = D.userById.get(r.lastInsertRowid);
