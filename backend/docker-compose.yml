@@ -1,0 +1,33 @@
+# Fully local LiveKit: media server + recorder (egress) + redis.
+# Start with:  docker compose up -d      (LAN_IP must be set — start.ps1 does it)
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  livekit:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    command: --config /livekit.yaml --node-ip ${LAN_IP}
+    volumes:
+      - ./livekit.yaml:/livekit.yaml:ro
+    ports:
+      - "7880:7880"               # websocket / API
+      - "7881:7881"               # ICE over TCP
+      - "50000-50050:50000-50050/udp"
+    depends_on: [redis]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  egress:
+    image: livekit/egress:latest
+    restart: unless-stopped
+    cap_add: [SYS_ADMIN]
+    environment:
+      EGRESS_CONFIG_FILE: /egress.yaml
+    volumes:
+      - ./egress.yaml:/egress.yaml:ro
+      - ./recordings:/out          # recordings land in backend/recordings
+    depends_on: [redis, livekit]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

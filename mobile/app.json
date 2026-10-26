@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Teams Clone",
+    "slug": "teams-clone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.kapil.teamsclone",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used for video calls.",
+        "NSMicrophoneUsageDescription": "Microphone is used for calls.",
+        "UIBackgroundModes": ["audio", "voip"]
+      }
+    },
+    "android": {
+      "package": "com.kapil.teamsclone",
+      "permissions": ["CAMERA", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "FOREGROUND_SERVICE", "BLUETOOTH"]
+    },
+    "plugins": [
+      "@livekit/react-native-expo-plugin",
+      "@config-plugins/react-native-webrtc",
+      ["expo-build-properties", { "android": { "minSdkVersion": 24 } }]
+    ]
+  }
+}

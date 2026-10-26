@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1f1f1f">
+<title>Akashwani</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+<div id="splash"><img src="icon.svg" alt=""><div>Akashwani</div></div>
+
+<section id="auth">
+  <form onsubmit="return submitAuth(event)">
+    <img src="icon.svg" alt="" style="width:84px;height:84px;margin:0 auto 4px;border-radius:20px">
+    <div class="center" style="font-size:22px;font-weight:700;letter-spacing:.5px;margin-bottom:12px">Akashwani</div>
+    <h2 id="authTitle">Sign in</h2>
+    <input id="aName" placeholder="Your name" autocomplete="name" class="hidden">
+    <input id="aEmail" type="email" placeholder="Email" autocomplete="email" required>
+    <input id="aPass" type="password" placeholder="Password" autocomplete="current-password" required minlength="6">
+    <div id="codeRow" class="hidden" style="display:flex;gap:8px;align-items:center">
+      <input id="aCode" placeholder="6-digit code from your email" inputmode="numeric" maxlength="6" style="flex:1">
+      <button type="button" class="btn ghost" id="sendCodeBtn" onclick="sendCode()">Send code</button>
+    </div>
+    <div class="muted small hidden" id="codeHint"></div>
+    <div class="err" id="aErr"></div>
+    <button class="btn" id="aBtn">Sign in</button>
+    <p class="muted small center"><span id="aSwitchText">New here?</span> <a onclick="toggleAuth()" id="aSwitch">Create an account</a></p>
+  </form>
+</section>
+
+<section id="app" class="hidden">
+  <div id="side">
+    <div class="top"><img src="icon.svg" alt="" style="width:28px;height:28px;border-radius:8px"><h1>Akashwani</h1><button class="ib" title="Recordings" onclick="openRecordings()">🎞</button><button class="ib" title="New" onclick="openNew()">✏️</button></div>
+    <div class="tabs"><button class="on" onclick="setTab('chats',this)">Chats</button><button onclick="setTab('people',this)">People</button></div>
+    <div class="list" id="chatList"></div>
+    <div class="list hidden" id="peopleList"></div>
+    <div class="me"><div class="avatar" id="meAvatar"></div><div class="grow"><div id="meName" style="font-weight:600"></div><div class="muted small" id="meEmail"></div></div><button class="ib" title="Sign out" onclick="logout()">⎋</button></div>
+  </div>
+  <div id="main">
+    <div class="empty" id="mainEmpty">Pick a chat, or start a new one with ✏️</div>
+    <div id="chatView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top">
+        <button class="ib" onclick="closeChat()">‹</button>
+        <div class="avatar" id="chatAvatar"></div>
+        <div class="grow" style="min-width:0"><h1 id="chatTitle"></h1><div class="muted small" id="chatSub"></div></div>
+        <button class="ib" id="addMemberBtn" title="Add people" onclick="openAddMember()">👤+</button>
+        <button class="ib" title="Call" onclick="startCall(cur.id, true)">📹</button>
+      </div>
+      <div id="msgs"></div>
+      <div id="typing"></div>
+      <div id="editbar"><span>Editing message</span><button onclick="cancelEdit()">Cancel</button></div>
+      <div class="composer"><textarea id="msgIn" rows="1" placeholder="Type a message"></textarea><button class="btn" onclick="send()">➤</button></div>
+    </div>
+    <div id="recView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
+      <div class="top"><button class="ib" onclick="closeChat()">‹</button><h1>Recordings</h1></div>
+      <div class="list" id="recList"></div>
+    </div>
+  </div>
+</section>
+
+<section id="call">
+  <div class="top"><h1 id="callTitle"></h1><span id="recTag" class="rec hidden">● REC</span><span class="muted small" id="callCount"></span></div>
+  <div id="banner"></div>
+  <div id="grid"></div>
+  <div class="controls">
+    <button id="micBtn" class="on" onclick="toggleMic()">🎤<span>Mic</span></button>
+    <button id="camBtn" class="on" onclick="toggleCam()">📷<span>Camera</span></button>
+    <button onclick="flip()">🔄<span>Flip</span></button>
+    <button id="shareBtn" class="hideMobile" onclick="toggleShare()">🖥<span>Share</span></button>
+    <button id="handBtn" onclick="toggleHand()">✋<span>Hand</span></button>
+    <button id="layoutBtn" onclick="toggleLayout()">▦<span>Layout</span></button>
+    <button id="recBtn" onclick="toggleRec()">⏺<span>Record</span></button>
+    <button class="d" onclick="hangup()">📵<span>Leave</span></button>
+  </div>
+</section>
+
+<div class="overlay" id="incoming"><div class="card">
+  <div class="avatar" id="incAvatar"></div><h3 id="incTitle"></h3><div class="muted" id="incSub">Incoming call…</div>
+  <div class="actions"><button class="btn danger" onclick="declineCall()">Decline</button><button class="btn" style="background:var(--ok)" onclick="acceptCall()">Join</button></div>
+</div></div>
+
+<div class="overlay" id="newDlg"><div class="card">
+  <h3>New</h3>
+  <input id="newTeamName" placeholder="Team name (leave blank for a direct chat)">
+  <div class="muted small">Pick people</div>
+  <div class="picklist" id="newPick"></div>
+  <div class="actions"><button class="btn ghost" onclick="closeDlg('newDlg')">Cancel</button><button class="btn" onclick="createNew()">Create</button></div>
+</div></div>
+
+<div class="overlay" id="memberDlg"><div class="card">
+  <h3>Add people</h3><div class="picklist" id="memberPick"></div>
+  <div class="actions"><button class="btn ghost" onclick="closeDlg('memberDlg')">Cancel</button><button class="btn" onclick="addMembers()">Add</button></div>
+</div></div>
+
+<div class="overlay" id="recDlg"><div class="card">
+  <h3>Start recording</h3>
+  <div class="muted small">Everyone in the call will be told that recording has started.</div>
+  <label class="chk"><input type="checkbox" id="recCams" checked> Cameras</label>
+  <label class="chk"><input type="checkbox" id="recShare" checked> Shared screen</label>
+  <label class="chk"><input type="checkbox" id="recAudio" checked> Audio (everyone's microphones)</label>
+  <div class="actions"><button class="btn ghost" onclick="closeDlg('recDlg')">Cancel</button><button class="btn danger" onclick="confirmRec()">⏺ Start</button></div>
+</div></div>
+
+<div id="player"><video id="pv" controls playsinline autoplay></video><button onclick="closePlayer()">Close</button></div>
+
+<script src="livekit-client.umd.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js?v=5"></script>
+</body>
+</html>
