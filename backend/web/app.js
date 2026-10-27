@@ -546,6 +546,7 @@ function play(url) { $('pv').src = url; $('player').classList.add('on'); }
 function closePlayer() { $('pv').pause(); $('pv').src = ''; $('player').classList.remove('on'); }
 
 // ---------- start ----------
+if (navigator.mediaDevices?.getDisplayMedia) $('shareBtn').classList.add('cap');
 if (token && me) boot();
 setTimeout(() => { $('splash').classList.add('off'); setTimeout(() => $('splash').remove(), 400); }, 900);
 document.addEventListener('click', (e) => { if (!e.target.closest('.m')) document.querySelectorAll('.m.open').forEach(x => x.classList.remove('open')); });
