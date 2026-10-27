@@ -453,6 +453,17 @@ function togglePin(btn, ev) {
   document.querySelectorAll('#grid .tile.pinned').forEach(t => t.classList.remove('pinned'));
   if (!was) tile.classList.add('pinned'); applyLayout(); toast(was ? 'Unpinned' : 'Pinned — only you see this layout');
 }
+function updateCount() { if (room) $('callCount').textContent = `${room.numParticipants} in call`; }
+function onData(d, p) {
+  if (d.type === 'recording') setRec(d.state === 'started', d.by, true);
+  if (d.type === 'hand') document.querySelectorAll(`.tile.cam[data-p="${p.identity}"] .hand`).forEach(h => h.classList.toggle('hidden', !d.up));
+}
+const sendData = (obj) => room?.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(obj)), { reliable: true });
+async function toggleMic() { const on = !room.localParticipant.isMicrophoneEnabled; await room.localParticipant.setMicrophoneEnabled(on); $('micBtn').classList.toggle('on', on); $('micBtn').firstChild.textContent = on ? '🎤' : '🔇'; }
+async function toggleCam() { const on = !room.localParticipant.isCameraEnabled; await room.localParticipant.setCameraEnabled(on); $('camBtn').classList.toggle('on', on); $('camBtn').firstChild.textContent = on ? '📷' : '🚫'; }
+async function flip() { const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera); if (!pub?.track) return; facing = facing === 'user' ? 'environment' : 'user'; await pub.track.restartTrack({ facingMode: facing }); document.querySelector('.tile.local.cam')?.classList.toggle('local', facing === 'user'); }
+async function toggleShare() { try { const on = !room.localParticipant.isScreenShareEnabled; await room.localParticipant.setScreenShareEnabled(on, { audio: true }); $('shareBtn').classList.toggle('on', room.localParticipant.isScreenShareEnabled); } catch (e) { if (e.name !== 'NotAllowedError') toast('Share: ' + e.message); } }
+async function toggleHand() { handUp = !handUp; $('handBtn').classList.toggle('on', handUp); document.querySelector('.tile.local.cam .hand')?.classList.toggle('hidden', !handUp); await sendData({ type: 'hand', up: handUp }); }
 async function hangup() { if (recording) await browserRec.stop().catch(() => {}); await room?.disconnect(); endCall(); }
 function endCall() { if (callChat) socket.emit('call:left', { chatId: callChat.id }); room = null; callChat = null; $('call').classList.remove('on'); document.querySelectorAll('audio[data-p]').forEach(a => a.remove()); }
 
