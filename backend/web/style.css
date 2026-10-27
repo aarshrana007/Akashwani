@@ -170,3 +170,12 @@ body.inchat #side{display:none}body.inchat #main{display:flex}
 .chk{display:flex;align-items:center;gap:10px;padding:6px 0;cursor:pointer}.chk input{width:18px;height:18px}
 #player{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:40}#player.on{display:flex}#player video{flex:1;width:100%;min-height:0}#player button{padding:16px;background:var(--navy);color:#fff}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:12px;z-index:50;font-size:14px;box-shadow:0 8px 24px rgba(11,47,82,.3)}
+
+/* pin + focus + layout menu */
+.tile .pin{position:absolute;right:8px;top:8px;width:30px;height:30px;border-radius:15px;background:rgba(0,0,0,.55);color:#fff;font-size:14px;display:none;z-index:2}.tile:hover .pin,.tile.pinned .pin{display:block}.tile.pinned .pin{background:var(--saffron)}.tile.pinned{outline:2px solid var(--saffron)}
+.tile .hand{right:44px}
+#grid.stage .tile.onstage{flex:1;aspect-ratio:auto;min-height:0;grid-column:auto}#grid.stage .tile.onstage video{object-fit:contain;background:#000}
+#grid.focus .strip{display:none}
+.layoutMenu{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#fff;color:var(--ink);border-radius:14px;padding:6px;width:240px;box-shadow:0 12px 30px rgba(0,0,0,.4);z-index:30;text-align:left}
+.layoutMenu button{width:100%;height:auto;border-radius:10px;background:none;color:var(--ink);display:flex;flex-direction:column;align-items:flex-start;padding:8px 12px;font-size:14px}.layoutMenu button:hover{background:var(--cream-2)}.layoutMenu button.on{background:var(--bubble-me)}.layoutMenu button span{position:static;transform:none;font-size:11px;color:var(--muted);white-space:normal}
+@media(hover:none){.tile .pin{display:block;opacity:.7}}

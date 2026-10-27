@@ -419,37 +419,40 @@ function attach(track, p, source) {
   const share = source === LK.Track.Source.ScreenShare;
   const tile = document.createElement('div'); tile.className = 'tile' + (p.isLocal ? ' local' : '') + (share ? ' share' : ' cam') + (share && p.isLocal ? ' selfshare' : ''); tile.dataset.p = p.identity;
   const v = track.attach(); v.setAttribute('playsinline', ''); tile.appendChild(v);
-  tile.insertAdjacentHTML('beforeend', `<div class="lbl">${share && p.isLocal ? 'You are sharing your screen' : esc(p.name || p.identity) + (p.isLocal ? ' (you)' : '') + (share ? ' — screen' : '')}</div><div class="hand hidden">✋</div>`);
+  tile.insertAdjacentHTML('beforeend', `<div class="lbl">${share && p.isLocal ? 'You are sharing your screen' : esc(p.name || p.identity) + (p.isLocal ? ' (you)' : '') + (share ? ' — screen' : '')}</div><div class="hand hidden">✋</div>${share && p.isLocal ? '' : '<button class="pin" title="Pin" onclick="togglePin(this, event)">📌</button>'}`);
   if (share) $('grid').prepend(tile); else $('grid').appendChild(tile);
   if (share && !p.isLocal && layout === 'auto') applyLayout('stage'); else applyLayout();
 }
 let layout = 'auto'; // 'auto' = stage when someone shares, grid otherwise; user can force 'grid' or 'stage'
 function applyLayout(force) {
-  const g = $('grid'); const hasShare = !!g.querySelector('.tile.share:not(.selfshare)');
-  const mode = force || (layout === 'auto' ? (hasShare ? 'stage' : 'grid') : layout);
+  const g = $('grid');
+  const pinned = g.querySelector('.tile.pinned'), share = g.querySelector('.tile.share:not(.selfshare)');
+  const main = pinned || share; // what goes on the stage
+  const mode = force || (layout === 'auto' ? (main ? 'stage' : 'grid') : layout);
   let strip = g.querySelector('.strip');
-  if (mode === 'stage' && hasShare) {
+  if ((mode === 'stage' || mode === 'focus') && main) {
     if (!strip) { strip = document.createElement('div'); strip.className = 'strip'; g.appendChild(strip); }
-    g.querySelectorAll(':scope > .tile.cam').forEach(t => strip.appendChild(t));
-    g.classList.add('stage');
+    g.querySelectorAll('.tile.cam, .tile.share:not(.selfshare)').forEach(t => { if (t === main) { t.classList.add('onstage'); g.prepend(t); } else { t.classList.remove('onstage'); strip.appendChild(t); } });
+    g.classList.add('stage'); g.classList.toggle('focus', mode === 'focus');
   } else {
     if (strip) { [...strip.children].forEach(t => g.appendChild(t)); strip.remove(); }
-    g.classList.remove('stage');
+    g.querySelectorAll('.onstage').forEach(t => t.classList.remove('onstage'));
+    g.classList.remove('stage', 'focus');
   }
-  $('layoutBtn').firstChild.textContent = g.classList.contains('stage') ? '▣' : '▦';
+  $('layoutBtn').firstChild.textContent = g.classList.contains('focus') ? '▢' : g.classList.contains('stage') ? '▣' : '▦';
 }
-function toggleLayout() { layout = $('grid').classList.contains('stage') ? 'grid' : 'stage'; applyLayout(); toast(layout === 'stage' ? 'Focus on shared content' : 'Grid view'); }
-function updateCount() { if (room) $('callCount').textContent = `${room.numParticipants} in call`; }
-function onData(d, p) {
-  if (d.type === 'recording') setRec(d.state === 'started', d.by, true);
-  if (d.type === 'hand') document.querySelectorAll(`.tile.cam[data-p="${p.identity}"] .hand`).forEach(h => h.classList.toggle('hidden', !d.up));
+function toggleLayout() {
+  const m = $('layoutMenu'); if (m) return m.remove();
+  const menu = document.createElement('div'); menu.id = 'layoutMenu'; menu.className = 'layoutMenu';
+  menu.innerHTML = [['auto', '✨ Automatic', 'Stage when someone shares or is pinned'], ['grid', '▦ Gallery', 'Everyone the same size'], ['stage', '▣ Stage', 'Content large, people on the side'], ['focus', '▢ Focus', 'Content only, hide people']]
+    .map(([v, t, d]) => `<button class="${layout === v ? 'on' : ''}" onclick="layout='${v}';applyLayout();document.getElementById('layoutMenu')?.remove()"><b>${t}</b><span>${d}</span></button>`).join('');
+  $('layoutBtn').appendChild(menu); setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
 }
-const sendData = (obj) => room?.localParticipant.publishData(new TextEncoder().encode(JSON.stringify(obj)), { reliable: true });
-async function toggleMic() { const on = !room.localParticipant.isMicrophoneEnabled; await room.localParticipant.setMicrophoneEnabled(on); $('micBtn').classList.toggle('on', on); $('micBtn').firstChild.textContent = on ? '🎤' : '🔇'; }
-async function toggleCam() { const on = !room.localParticipant.isCameraEnabled; await room.localParticipant.setCameraEnabled(on); $('camBtn').classList.toggle('on', on); $('camBtn').firstChild.textContent = on ? '📷' : '🚫'; }
-async function flip() { const pub = room.localParticipant.getTrackPublication(LK.Track.Source.Camera); if (!pub?.track) return; facing = facing === 'user' ? 'environment' : 'user'; await pub.track.restartTrack({ facingMode: facing }); document.querySelector('.tile.local.cam')?.classList.toggle('local', facing === 'user'); }
-async function toggleShare() { try { const on = !room.localParticipant.isScreenShareEnabled; await room.localParticipant.setScreenShareEnabled(on, { audio: true }); $('shareBtn').classList.toggle('on', room.localParticipant.isScreenShareEnabled); } catch (e) { if (e.name !== 'NotAllowedError') toast('Share: ' + e.message); } }
-async function toggleHand() { handUp = !handUp; $('handBtn').classList.toggle('on', handUp); document.querySelector('.tile.local.cam .hand')?.classList.toggle('hidden', !handUp); await sendData({ type: 'hand', up: handUp }); }
+function togglePin(btn, ev) {
+  ev?.stopPropagation(); const tile = btn.closest('.tile'); const was = tile.classList.contains('pinned');
+  document.querySelectorAll('#grid .tile.pinned').forEach(t => t.classList.remove('pinned'));
+  if (!was) tile.classList.add('pinned'); applyLayout(); toast(was ? 'Unpinned' : 'Pinned — only you see this layout');
+}
 async function hangup() { if (recording) await browserRec.stop().catch(() => {}); await room?.disconnect(); endCall(); }
 function endCall() { if (callChat) socket.emit('call:left', { chatId: callChat.id }); room = null; callChat = null; $('call').classList.remove('on'); document.querySelectorAll('audio[data-p]').forEach(a => a.remove()); }
 
