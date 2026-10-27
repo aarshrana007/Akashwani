@@ -1,5 +1,12 @@
 # Akashwani — chat, video calls and call recording
 
+## Security (v4)
+- Message requests: a first message from someone new waits under **Requests** until you Accept or Block; blocked users can't message or find you
+- Admin (first account): approve/reject sign-ups (set Sign-ups → Approval), disable/delete users, make admins, delete any message
+- Devices: see signed-in devices in your profile, sign out one or all; password reset signs out everywhere
+- New-device sign-in email alert · optional **two-step verification** with Google/Microsoft Authenticator
+- `backup.ps1` copies the database, files and recordings nightly (`.\backup.ps1 -Install`, keeps 14 days)
+
 ## What's in v3
 - Akashwani design: navy/saffron/cream, logo, split login with illustration, nav rail (Chat · Teams · Meetings · Files · People), top search bar with notifications
 - Profiles: photo, title, bio, phone (click your avatar) · details panel with About / Files / Linked channels tabs

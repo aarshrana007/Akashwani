@@ -85,7 +85,7 @@ body.inchat #side{display:none}body.inchat #main{display:flex}
 #chatView .top h1{font-size:18px;font-family:var(--sans);font-weight:700}
 .chathead{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer}.chathead:hover h1{text-decoration:underline;text-decoration-color:var(--saffron)}
 .search{position:relative;margin:8px 14px 10px}.search input{padding-left:40px;border-radius:22px;background:#fff}.search svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted)}
-.chips{display:flex;gap:8px;padding:0 14px 10px}.chips button{padding:7px 16px;border-radius:20px;background:#fff;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px}.chips button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 14px 10px}.chips button{padding:7px 14px;border-radius:20px;background:#fff;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:6px}.chips button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .list{flex:1;overflow:auto}
 .row{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;margin:2px 8px;border-radius:14px;transition:background .12s}.row:hover{background:#fff}.row.on{background:#e4eefb}
 .row .grow{flex:1;min-width:0}.row .name{font-weight:700;display:flex;align-items:center;gap:6px;color:var(--navy)}.row .sub{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -179,3 +179,8 @@ body.inchat #side{display:none}body.inchat #main{display:flex}
 .layoutMenu{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#fff;color:var(--ink);border-radius:14px;padding:6px;width:240px;box-shadow:0 12px 30px rgba(0,0,0,.4);z-index:30;text-align:left}
 .layoutMenu button{width:100%;height:auto;border-radius:10px;background:none;color:var(--ink);display:flex;flex-direction:column;align-items:flex-start;padding:8px 12px;font-size:14px}.layoutMenu button:hover{background:var(--cream-2)}.layoutMenu button.on{background:var(--bubble-me)}.layoutMenu button span{position:static;transform:none;font-size:11px;color:var(--muted);white-space:normal}
 @media(hover:none){.tile .pin{display:block;opacity:.7}}
+
+#reqbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 16px;background:var(--saffron-soft);border-bottom:1px solid var(--line);font-size:14px}#reqbar .btn{padding:8px 14px}
+.adminRow{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}.adminRow .btn{padding:6px 10px;font-size:12px}.adminRow .tag{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--cream-2);color:var(--muted)}.adminRow .tag.admin{background:var(--navy);color:#fff}.adminRow .tag.pending{background:var(--saffron);color:#fff}.adminRow .tag.disabled{background:var(--danger);color:#fff}
+.sessRow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}.sessRow .btn{padding:4px 10px;font-size:12px}
+#profileDlg .card{max-height:92vh;overflow:auto}

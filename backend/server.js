@@ -7,6 +7,7 @@ const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const QR = require('qrcode');
 const { Server } = require('socket.io');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const { AccessToken, RoomServiceClient } = require('livekit-server-sdk');
@@ -45,16 +46,25 @@ const roomSvc = new RoomServiceClient(LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_
 const now = () => Date.now();
 const COLORS = ['#6264a7', '#c4314b', '#92c353', '#e8912d', '#0d9488', '#7c3aed', '#db2777', '#2563eb'];
 const hash = (pw, salt) => crypto.scryptSync(pw, salt, 32).toString('hex');
-const sign = (u) => jwt.sign({ id: u.id, name: u.name }, JWT_SECRET, { expiresIn: '30d' });
-const pub = (u) => ({ id: u.id, email: u.email, name: u.name, color: u.color, bio: u.bio || '', phone: u.phone || '', title: u.title || '', avatar: u.avatar || null });
+const sign = (u, sid) => jwt.sign({ id: u.id, sid }, JWT_SECRET, { expiresIn: '30d' });
+const newSession = (u, req) => { const sid = crypto.randomBytes(16).toString('hex'); D.insertSession.run(sid, u.id, now(), now(), String(req.headers['user-agent'] || '').slice(0, 200), req.ip); return sid; };
+const deviceName = (ua = '') => { const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'Device'; const br = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : 'Browser'; return `${br} on ${os}`; };
+const setting = (k, dflt) => D.getSetting.get(k)?.value ?? dflt;
+// TOTP (RFC 6238) — compatible with Google/Microsoft Authenticator
+const b32 = { enc: (buf) => { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = '', out = ''; for (const b of buf) bits += b.toString(2).padStart(8, '0'); for (let i = 0; i + 5 <= bits.length; i += 5) out += A[parseInt(bits.slice(i, i + 5), 2)]; return out; },
+  dec: (str) => { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = ''; for (const c of str.replace(/=+$/, '').toUpperCase()) bits += A.indexOf(c).toString(2).padStart(5, '0'); const out = []; for (let i = 0; i + 8 <= bits.length; i += 8) out.push(parseInt(bits.slice(i, i + 8), 2)); return Buffer.from(out); } };
+const totpCode = (secret, step = 0) => { const t = Buffer.alloc(8); t.writeBigInt64BE(BigInt(Math.floor(now() / 30000) + step)); const h = crypto.createHmac('sha1', b32.dec(secret)).update(t).digest(); const o = h[19] & 15; return String(((h.readUInt32BE(o) & 0x7fffffff) % 1e6)).padStart(6, '0'); };
+const totpOk = (secret, code) => [-1, 0, 1].some(st => totpCode(secret, st) === String(code || '').trim());
+async function sendMail(to, subject, text) { if (!mailer) { console.log(`\n>>> [mail to ${to}] ${subject}\n${text}\n`); return false; } try { await mailer.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text }); return true; } catch (e) { console.error('mail failed:', e.message); return false; } }
+const pub = (u) => ({ id: u.id, email: u.email, name: u.name, color: u.color, bio: u.bio || '', phone: u.phone || '', title: u.title || '', avatar: u.avatar || null, role: u.role || 'member', totp: !!u.totp });
 const FILES_DIR = path.join(__dirname, 'files'); fs.mkdirSync(FILES_DIR, { recursive: true });
 const safeName = (n) => String(n || 'file').replace(/[^\w.\-() ]+/g, '_').slice(0, 120);
 const extOf = (name, mime) => (path.extname(name || '').slice(1) || (mime || '').split('/')[1] || 'bin').replace(/[^\w]/g, '').slice(0, 8);
 const bad = (res, code, error) => res.status(code).json({ error });
-const auth = (req, res, next) => {
-  try { req.user = D.userById.get(jwt.verify((req.headers.authorization || '').replace('Bearer ', ''), JWT_SECRET).id); if (!req.user) throw 0; next(); }
-  catch { bad(res, 401, 'unauthorised'); }
-};
+const verifyToken = (t) => { const p = jwt.verify(t, JWT_SECRET); const u = D.userById.get(p.id); if (!u || u.status !== 'active') return null; if (p.sid) { const sess = D.session.get(p.sid); if (!sess || sess.revoked) return null; D.touchSession.run(now(), p.sid, now() - 60000); u.sid = p.sid; } return u; };
+const auth = (req, res, next) => { try { req.user = verifyToken((req.headers.authorization || '').replace('Bearer ', '')); if (!req.user) throw 0; next(); } catch { bad(res, 401, 'unauthorised'); } };
+const admin = (req, res, next) => (req.user.role === 'admin' ? next() : bad(res, 403, 'admin only'));
+const notBlocked = (req, res, next) => { const c = D.chatById.get(+req.params.id); if (c?.kind === 'dm') { const o = D.memberIds.all(c.id).map(m => m.user_id).find(id => id !== req.user.id); if (o && D.isBlocked.get(req.user.id, o, o, req.user.id)) return bad(res, 403, 'you cannot message this person'); } next(); };
 const member = (req, res, next) => (D.isMember.get(+req.params.id, req.user.id) ? next() : bad(res, 403, 'not a member'));
 const roomName = (chatId) => `chat-${chatId}`;
 const emitChat = (chatId, ev, data) => io.to(roomName(chatId)).emit(ev, data);
@@ -104,8 +114,9 @@ app.post('/auth/reset', limit, (req, res) => {
   const err = checkCode('reset', email, code); if (err) return bad(res, 400, err);
   const salt = crypto.randomBytes(16).toString('hex');
   D.updatePassword.run(hash(password, salt), salt, u.id);
+  D.revokeAll.run(u.id, ''); // password changed → sign out every device
   const fresh = D.userById.get(u.id);
-  res.json({ token: sign(fresh), user: pub(fresh) });
+  res.json({ token: sign(fresh, newSession(fresh, req)), user: pub(fresh) });
 });
 
 app.post('/auth/register', limit, (req, res) => {
@@ -117,20 +128,72 @@ app.post('/auth/register', limit, (req, res) => {
   const err = checkCode('register', email, code); if (err) return bad(res, 400, err);
   const salt = crypto.randomBytes(16).toString('hex');
   const r = D.insertUser.run(email, name.trim(), hash(password, salt), salt, COLORS[Math.floor(Math.random() * COLORS.length)], now());
+  const first = D.userCount.get().n === 1;
+  if (first) D.setRole.run('admin', r.lastInsertRowid);
+  if (!first && setting('signup', 'open') === 'approval') {
+    D.setStatus.run('pending', r.lastInsertRowid);
+    for (const a of D.adminUsers.all().filter(x => x.role === 'admin')) { emitUser(a.id, 'admin:pending'); sendMail(a.email, `${process.env.APP_NAME || 'Akashwani'}: new sign-up awaiting approval`, `${name} (${email}) has signed up and is waiting for your approval. Open Admin in the app to approve.`); }
+    return res.json({ pending: true });
+  }
   const u = D.userById.get(r.lastInsertRowid);
   io.emit('users:changed');
-  res.json({ token: sign(u), user: pub(u) });
+  res.json({ token: sign(u, newSession(u, req)), user: pub(u) });
 });
-app.post('/auth/login', limit, (req, res) => {
+const pendingLogins = new Map(); // tmp token -> { uid, exp } for 2FA step
+app.post('/auth/login', limit, async (req, res) => {
   const { email, password } = req.body || {};
   const u = D.userByEmail.get((email || '').toLowerCase());
   if (!u || hash(password || '', u.salt) !== u.pass_hash) return bad(res, 401, 'wrong email or password');
-  res.json({ token: sign(u), user: pub(u) });
+  if (u.status === 'pending') return bad(res, 403, 'your account is waiting for admin approval');
+  if (u.status === 'disabled') return bad(res, 403, 'this account has been disabled');
+  if (u.totp) { const t = crypto.randomBytes(16).toString('hex'); pendingLogins.set(t, { uid: u.id, exp: now() + 5 * 60 * 1000 }); return res.json({ need2fa: true, tmp: t }); }
+  finishLogin(u, req, res);
 });
+app.post('/auth/2fa', limit, (req, res) => {
+  const p = pendingLogins.get(req.body?.tmp); if (!p || p.exp < now()) return bad(res, 400, 'login expired — try again');
+  const u = D.userById.get(p.uid); const full = D.userByEmail.get(u.email);
+  if (!totpOk(full.totp, req.body?.code)) return bad(res, 401, 'wrong authenticator code');
+  pendingLogins.delete(req.body.tmp); finishLogin(u, req, res);
+});
+function finishLogin(u, req, res) {
+  const ua = String(req.headers['user-agent'] || '').slice(0, 200);
+  const known = D.knownDevice.get(u.id, ua);
+  const sid = newSession(u, req);
+  if (!known) sendMail(u.email, `${process.env.APP_NAME || 'Akashwani'}: new sign-in`, `Your account was just signed in from a new device: ${deviceName(ua)} (IP ${req.ip}) at ${new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' })}.\nIf this wasn't you, open your profile → Devices → "Sign out everywhere" and change your password.`);
+  res.json({ token: sign(u, sid), user: pub(u) });
+}
 
 app.get('/config', (_req, res) => res.json({ recording: 'browser', cloud: CLOUD }));
 app.use('/api', auth);
 app.get('/api/me', (req, res) => res.json(pub(req.user)));
+app.get('/api/me/sessions', (req, res) => res.json(D.mySessions.all(req.user.id).map(s => ({ ...s, device: deviceName(s.ua), current: s.id === req.user.sid }))));
+app.delete('/api/me/sessions/:sid', (req, res) => { D.revokeSession.run(req.params.sid, req.user.id); res.json({ ok: true }); });
+app.post('/api/me/sessions/revoke-all', (req, res) => { D.revokeAll.run(req.user.id, req.user.sid || ''); res.json({ ok: true }); });
+app.post('/api/me/2fa/setup', async (req, res) => {
+  const secret = b32.enc(crypto.randomBytes(20)); pendingLogins.set('setup:' + req.user.id, { secret, exp: now() + 10 * 60 * 1000 });
+  const url = `otpauth://totp/${encodeURIComponent(process.env.APP_NAME || 'Akashwani')}:${encodeURIComponent(req.user.email)}?secret=${secret}&issuer=${encodeURIComponent(process.env.APP_NAME || 'Akashwani')}`;
+  res.json({ secret, qr: await QR.toDataURL(url, { margin: 1, width: 200 }) });
+});
+app.post('/api/me/2fa/enable', (req, res) => {
+  const p = pendingLogins.get('setup:' + req.user.id); if (!p || p.exp < now()) return bad(res, 400, 'start setup again');
+  if (!totpOk(p.secret, req.body?.code)) return bad(res, 400, 'wrong code — check the time on your phone');
+  D.setTotp.run(p.secret, req.user.id); pendingLogins.delete('setup:' + req.user.id); res.json({ ok: true });
+});
+app.post('/api/me/2fa/disable', (req, res) => {
+  const full = D.userByEmail.get(req.user.email); if (!full.totp) return res.json({ ok: true });
+  if (!totpOk(full.totp, req.body?.code)) return bad(res, 400, 'wrong code'); D.setTotp.run(null, req.user.id); res.json({ ok: true });
+});
+app.get('/api/me/blocks', (req, res) => res.json(D.myBlocks.all(req.user.id)));
+app.post('/api/users/:uid/block', (req, res) => { D.block.run(req.user.id, +req.params.uid, now()); emitUser(req.user.id, 'chats:changed'); res.json({ ok: true }); });
+app.delete('/api/users/:uid/block', (req, res) => { D.unblock.run(req.user.id, +req.params.uid); emitUser(req.user.id, 'chats:changed'); res.json({ ok: true }); });
+// ---------- admin ----------
+app.get('/api/admin', admin, (req, res) => res.json({ signup: setting('signup', 'open'), pending: D.pendingUsers.all(), users: D.adminUsers.all().map(u => ({ ...u, online: online.has(u.id) })) }));
+app.post('/api/admin/settings', admin, (req, res) => { if (['open', 'approval'].includes(req.body.signup)) D.setSetting.run('signup', req.body.signup); res.json({ ok: true }); });
+app.post('/api/admin/users/:uid/approve', admin, (req, res) => { const u = D.userById.get(+req.params.uid); if (!u) return bad(res, 404, 'no user'); D.setStatus.run('active', u.id); io.emit('users:changed'); sendMail(u.email, `${process.env.APP_NAME || 'Akashwani'}: account approved`, 'Your account has been approved — you can sign in now.'); res.json({ ok: true }); });
+app.post('/api/admin/users/:uid/disable', admin, (req, res) => { if (+req.params.uid === req.user.id) return bad(res, 400, 'not yourself'); D.setStatus.run('disabled', +req.params.uid); D.revokeAll.run(+req.params.uid, ''); io.emit('users:changed'); res.json({ ok: true }); });
+app.post('/api/admin/users/:uid/enable', admin, (req, res) => { D.setStatus.run('active', +req.params.uid); io.emit('users:changed'); res.json({ ok: true }); });
+app.delete('/api/admin/users/:uid', admin, (req, res) => { if (+req.params.uid === req.user.id) return bad(res, 400, 'not yourself'); D.deleteUser.run(+req.params.uid); io.emit('users:changed'); res.json({ ok: true }); });
+app.post('/api/admin/users/:uid/role', admin, (req, res) => { if (+req.params.uid === req.user.id) return bad(res, 400, 'not yourself'); D.setRole.run(req.body.role === 'admin' ? 'admin' : 'member', +req.params.uid); io.emit('users:changed'); res.json({ ok: true }); });
 app.patch('/api/me', (req, res) => {
   const { name, bio, phone, title } = req.body || {};
   if (!name || !name.trim()) return bad(res, 400, 'name required');
@@ -149,7 +212,7 @@ app.use('/files', (req, res, next) => (req.path.startsWith('/avatars/') ? next()
 }, express.static(FILES_DIR));
 
 // ---------- attachments (files, images, voice notes) ----------
-app.post('/api/chats/:id/upload', member, express.raw({ type: '*/*', limit: '100mb' }), (req, res) => {
+app.post('/api/chats/:id/upload', member, notBlocked, express.raw({ type: '*/*', limit: '100mb' }), (req, res) => {
   if (!req.body?.length) return bad(res, 400, 'empty');
   const chatId = +req.params.id, name = safeName(req.query.name), mime = String(req.query.mime || req.headers['content-type'] || 'application/octet-stream').slice(0, 80);
   const duration = +req.query.duration || null, text = String(req.query.text || '').slice(0, 2000);
@@ -170,7 +233,7 @@ const online = new Map(); // userId -> socket count
 app.get('/api/users', (req, res) => res.json(D.contacts.all(req.user.id, req.user.id).map(u => ({ ...u, online: online.has(u.id) }))));
 app.post('/api/users/lookup', (req, res) => { // find someone new by exact email
   const u = D.userByEmail.get(String(req.body.email || '').trim().toLowerCase());
-  if (!u || u.id === req.user.id) return bad(res, 404, 'No account with that email');
+  if (!u || u.id === req.user.id || u.status !== 'active' || D.isBlocked.get(req.user.id, u.id, u.id, req.user.id)) return bad(res, 404, 'No account with that email');
   res.json({ id: u.id, name: u.name, color: u.color, avatar: u.avatar, title: u.title });
 });
 
@@ -180,7 +243,7 @@ function chatSummary(c, me) {
   const other = c.kind === 'dm' ? members.find(m => m.id !== me) : null;
   return { id: c.id, kind: c.kind, name: c.kind === 'dm' ? (other?.name || 'Direct chat') : c.name, color: other?.color, avatar: other?.avatar || null,
     otherId: other?.id, online: other ? online.has(other.id) : undefined, members, unread: c.unread, last: c.last ? JSON.parse(c.last) : null,
-    inCall: callers.get(c.id)?.size || 0 };
+    inCall: callers.get(c.id)?.size || 0, status: c.status || 'accepted', requestedBy: c.requested_by || null, blocked: other ? !!D.iBlocked.get(me, other.id) : false, blockedMe: other ? !!D.iBlocked.get(other.id, me) : false };
 }
 app.get('/api/chats', (req, res) => res.json(D.myChats.all(req.user.id).map(c => chatSummary(c, req.user.id)).sort((a, b) => (b.last?.ts || b.created || 0) - (a.last?.ts || a.created || 0))));
 app.post('/api/chats/team', (req, res) => {
@@ -194,8 +257,13 @@ app.post('/api/chats/team', (req, res) => {
 });
 app.post('/api/chats/dm', (req, res) => {
   const other = D.userById.get(+req.body.userId); if (!other || other.id === req.user.id) return bad(res, 400, 'bad user');
+  if (D.isBlocked.get(req.user.id, other.id, other.id, req.user.id)) return bad(res, 403, 'unavailable');
   let id = D.findDm.get(req.user.id, other.id)?.id;
-  if (!id) { id = D.insertChat.run('dm', null, req.user.id, now()).lastInsertRowid; D.addMember.run(id, req.user.id, now()); D.addMember.run(id, other.id, now()); emitUser(other.id, 'chats:changed'); }
+  if (!id) {
+    const known = D.contacts.all(req.user.id, req.user.id, req.user.id, req.user.id).some(c => c.id === other.id);
+    id = known ? D.insertChat.run('dm', null, req.user.id, now()).lastInsertRowid : D.insertDmRequest.run(req.user.id, now(), req.user.id).lastInsertRowid;
+    D.addMember.run(id, req.user.id, now()); D.addMember.run(id, other.id, now()); emitUser(other.id, 'chats:changed');
+  }
   res.json(chatSummary({ ...D.chatById.get(id), unread: 0 }, req.user.id));
 });
 app.post('/api/chats/:id/members', member, (req, res) => {
@@ -213,11 +281,12 @@ app.post('/api/chats/:id/members', member, (req, res) => {
   for (const id of all) { D.addMember.run(nid, id, now()); emitUser(id, 'chats:changed'); }
   res.json({ ok: true, chatId: nid, created: true });
 });
+app.post('/api/chats/:id/accept', member, (req, res) => { const c = D.chatById.get(+req.params.id); if (c.requested_by === req.user.id) return bad(res, 400, 'you sent this request'); D.setChatStatus.run('accepted', c.id); for (const { user_id } of D.memberIds.all(c.id)) emitUser(user_id, 'chats:changed'); res.json({ ok: true }); });
 app.get('/api/chats/:id/messages', member, (req, res) => {
   const before = +req.query.before || Number.MAX_SAFE_INTEGER;
   res.json(D.messages.all(+req.params.id, before, 50).reverse().map(parseMsg));
 });
-app.post('/api/chats/:id/messages', member, (req, res) => {
+app.post('/api/chats/:id/messages', member, notBlocked, (req, res) => {
   const text = (req.body.text || '').trim(); if (!text) return bad(res, 400, 'empty');
   const chatId = +req.params.id;
   const id = D.insertMessage.run(chatId, req.user.id, text, now()).lastInsertRowid;
@@ -235,7 +304,7 @@ app.patch('/api/messages/:mid', (req, res) => {
 });
 app.delete('/api/messages/:mid', (req, res) => {
   const m = D.messageById.get(+req.params.mid); if (!m) return bad(res, 404, 'no message');
-  if (!D.deleteMessage.run(m.id, req.user.id).changes) return bad(res, 403, 'not yours');
+  if (!D.deleteMessage.run(m.id, req.user.id).changes) { if (req.user.role === 'admin') D.adminDeleteMessage.run(m.id); else return bad(res, 403, 'not yours'); }
   emitChat(m.chat_id, 'message:delete', { id: m.id, chat_id: m.chat_id }); res.json({ ok: true });
 });
 app.post('/api/messages/:mid/react', (req, res) => {
@@ -279,7 +348,7 @@ app.post('/api/chats/:id/recordings', member, express.raw({ type: '*/*', limit: 
 
 // ---------- Socket.IO ----------
 io.use((socket, next) => {
-  try { socket.user = D.userById.get(jwt.verify(socket.handshake.auth.token, JWT_SECRET).id); if (!socket.user) throw 0; next(); } catch { next(new Error('unauthorised')); }
+  try { socket.user = verifyToken(socket.handshake.auth.token); if (!socket.user) throw 0; next(); } catch { next(new Error('unauthorised')); }
 });
 io.on('connection', (socket) => {
   const me = socket.user;

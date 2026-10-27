@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 <div id="splash"><img src="icon.svg" alt=""><div>Akashwani</div></div>
@@ -76,6 +76,7 @@
         <button type="button" class="btn ghost" id="sendCodeBtn" onclick="sendCode()">Send code</button>
       </div>
       <div class="muted small hidden" id="codeHint"></div>
+      <div class="field hidden" id="totpRow"><svg class="i"><use href="#i-lock"/></svg><input id="aTotp" placeholder="Authenticator code" inputmode="numeric" maxlength="6"></div>
       <p class="small" id="forgotRow" style="margin:0;text-align:right"><a onclick="setAuthMode('reset')">Forgot Password?</a></p>
       <div class="err" id="aErr"></div>
       <button class="btn navy big" id="aBtn">Login <svg class="i"><use href="#i-right"/></svg></button>
@@ -92,6 +93,7 @@
     <button data-nav="meetings" onclick="setNav('meetings')"><svg class="i"><use href="#i-meet"/></svg>Meetings</button>
     <button data-nav="files" onclick="setNav('files')"><svg class="i"><use href="#i-files"/></svg>Files</button>
     <button data-nav="people" onclick="setNav('people')"><svg class="i"><use href="#i-people"/></svg>People</button>
+    <button data-nav="admin" class="hidden adminOnly" onclick="setNav('admin')"><svg class="i"><use href="#i-key"/></svg>Admin<span class="badge hidden" id="railPending"></span></button>
     <div class="art"><img src="rail-art.jpg" alt=""></div>
     <button class="meRow" onclick="openProfile()"><div class="avatar" id="meAvatar"></div><span id="meNameRail"></span><svg class="i"><use href="#i-right"/></svg></button>
   </nav>
@@ -108,11 +110,12 @@
       <div id="side">
         <div class="top"><h1 id="sideTitle">Chat</h1><button class="ib" title="New chat or team" onclick="openNew()"><svg class="i"><use href="#i-edit"/></svg></button></div>
         <div class="search"><svg class="i"><use href="#i-search"/></svg><input id="sideSearch" placeholder="Search conversations…" oninput="renderChats();renderPeople()"></div>
-        <div class="chips" id="chips"><button class="on" onclick="setFilter('all',this)">All</button><button onclick="setFilter('unread',this)">Unread <span class="badge hidden" id="chipUnread"></span></button><button onclick="setFilter('groups',this)">Groups</button></div>
+        <div class="chips" id="chips"><button class="on" onclick="setFilter('all',this)">All</button><button onclick="setFilter('unread',this)">Unread <span class="badge hidden" id="chipUnread"></span></button><button onclick="setFilter('groups',this)">Groups</button><button onclick="setFilter('requests',this)" id="reqChip" class="hidden">Requests <span class="badge hidden" id="chipReq"></span></button></div>
         <div class="list" id="chatList"></div>
         <div class="list hidden" id="peopleList"></div>
         <div class="list hidden" id="meetList"></div>
         <div class="list hidden" id="fileList"></div>
+        <div class="list hidden" id="adminList"></div>
         <div class="me"><div class="avatar" id="meAvatar2"></div><div class="grow"><div id="meName" style="font-weight:700;color:var(--navy)"></div><div class="muted small" id="meTitle"></div></div><button class="ib" title="Sign out" onclick="logout()"><svg class="i"><use href="#i-out"/></svg></button></div>
       </div>
 
@@ -131,6 +134,7 @@
             <button class="ib" title="Video call" onclick="startCall(cur.id, true, true)"><svg class="i"><use href="#i-video"/></svg></button>
             <button class="ib" title="Details" onclick="togglePanel()"><svg class="i"><use href="#i-more"/></svg></button>
           </div>
+          <div id="reqbar" class="hidden"></div>
           <div id="msgs"></div>
           <div id="typing"></div>
           <div id="editbar"><span>Editing message</span><button onclick="cancelEdit()">Cancel</button></div>
@@ -162,6 +166,7 @@
             <button class="action" onclick="startCall(cur.id, true, true)"><svg class="i"><use href="#i-video"/></svg>Start a video call</button>
             <button class="action" id="pAddBtn" onclick="openAddMember()"><svg class="i"><use href="#i-adduser"/></svg>Add people</button>
             <button class="action" onclick="setNav('recordings')"><svg class="i"><use href="#i-rec"/></svg>Recordings</button>
+            <button class="action hidden" id="pBlockBtn" style="color:var(--danger)" onclick="toggleBlock()"><svg class="i"><use href="#i-x"/></svg><span id="pBlockText">Block</span></button>
           </div>
         </div>
         <div class="pbody hidden" id="pFiles"></div>
@@ -176,6 +181,7 @@
     <button data-nav="meetings" onclick="setNav('meetings')"><svg class="i"><use href="#i-meet"/></svg>Meet</button>
     <button data-nav="files" onclick="setNav('files')"><svg class="i"><use href="#i-files"/></svg>Files</button>
     <button data-nav="people" onclick="setNav('people')"><svg class="i"><use href="#i-people"/></svg>People</button>
+    <button data-nav="admin" class="hidden adminOnly" onclick="setNav('admin')"><svg class="i"><use href="#i-key"/></svg>Admin</button>
   </nav>
 </section>
 
@@ -226,6 +232,10 @@
   <textarea id="profBio" rows="2" placeholder="A line about you"></textarea>
   <input id="profPhone" placeholder="Phone (optional)" inputmode="tel">
   <div class="muted small" id="profEmail"></div>
+  <div class="card2" style="margin:0"><h4>Security</h4>
+    <div id="twofaBox"></div>
+    <div style="margin-top:10px"><div class="muted small" style="margin-bottom:4px">Signed-in devices</div><div id="sessList"></div><button class="btn ghost" style="margin-top:6px" onclick="revokeAll()">Sign out everywhere else</button></div>
+  </div>
   <div class="actions"><button class="btn ghost" onclick="logout()">Sign out</button><button class="btn ghost" onclick="closeDlg('profileDlg')">Cancel</button><button class="btn" onclick="saveProfile()">Save</button></div>
 </div></div>
 
@@ -244,6 +254,6 @@
 
 <script src="livekit-client.umd.js"></script>
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

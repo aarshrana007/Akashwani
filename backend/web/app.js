@@ -40,12 +40,20 @@ function setAuthMode(mode) {
   $('forgotRow').classList.toggle('hidden', mode !== 'login'); $('aErr').textContent = '';
 }
 function toggleAuth() { setAuthMode(authMode === 'login' ? 'register' : 'login'); }
+let tmp2fa = null;
 async function submitAuth(e) {
   e.preventDefault(); $('aErr').textContent = ''; $('aBtn').disabled = true;
   try {
+    if (tmp2fa) {
+      const r = await fetch('/auth/2fa', { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' }, body: JSON.stringify({ tmp: tmp2fa, code: $('aTotp').value.trim() }) });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error);
+      token = j.token; me = j.user; localStorage.setItem('token', token); localStorage.setItem('me', JSON.stringify(me)); tmp2fa = null; boot(); return false;
+    }
     const r = await fetch({ login: '/auth/login', register: '/auth/register', reset: '/auth/reset' }[authMode], { method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
       body: JSON.stringify({ email: $('aEmail').value.trim(), password: $('aPass').value, name: $('aName').value.trim(), code: $('aCode').value.trim() }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    if (j.pending) { $('aErr').style.color = 'var(--ok)'; $('aErr').textContent = 'Account created — an admin needs to approve it before you can sign in.'; setAuthMode('login'); $('aErr').textContent = 'Account created — waiting for admin approval.'; return false; }
+    if (j.need2fa) { tmp2fa = j.tmp; $('totpRow').classList.remove('hidden'); $('aTotp').required = true; $('aTotp').focus(); $('aBtn').innerHTML = 'Verify'; return false; }
     token = j.token; me = j.user; localStorage.setItem('token', token); localStorage.setItem('me', JSON.stringify(me));
     boot();
   } catch (err) { $('aErr').textContent = err.message; } finally { $('aBtn').disabled = false; }
@@ -69,8 +77,9 @@ function logout() { localStorage.removeItem('token'); localStorage.removeItem('m
 async function boot() {
   $('auth').classList.add('hidden'); $('app').classList.remove('hidden');
   renderMe();
+  document.querySelectorAll('.adminOnly').forEach(b => b.classList.toggle('hidden', me.role !== 'admin'));
   connectSocket();
-  await Promise.all([loadChats(), loadPeople()]); api('/api/files').then(f => allFiles = f).catch(() => {});
+  await Promise.all([loadChats(), loadPeople()]); loadAdminBadge(); api('/api/files').then(f => allFiles = f).catch(() => {});
   api('/config').then(c => { if (!c.recording) $('recBtn').classList.add('hidden'); });
   if ('Notification' in window && Notification.permission === 'default') setTimeout(() => Notification.requestPermission(), 3000);
 }
@@ -78,11 +87,27 @@ function renderMe() {
   for (const id of ['meAvatar', 'meAvatar2', 'meAvatarTop']) { const el = $(id); if (el) el.outerHTML = avatarHtml(me.name, me.color, { avatar: me.avatar }).replace('class="avatar"', `class="avatar" id="${id}"`); }
   $('meName').textContent = me.name; $('meNameRail').textContent = me.name; $('meTitle').textContent = me.title || 'Set your title in profile';
 }
+async function loadAdminBadge() { if (me.role !== 'admin') return; try { const a = await api('/api/admin'); const n = a.pending.length; $('railPending').textContent = n; $('railPending').classList.toggle('hidden', !n); } catch {} }
 async function openProfile() {
   $('profAvatar').outerHTML = avatarHtml(me.name, me.color, { avatar: me.avatar }).replace('class="avatar"', 'class="avatar" id="profAvatar" style="width:72px;height:72px;font-size:26px;background:' + me.color + '"');
   $('profName').value = me.name; $('profTitle').value = me.title || ''; $('profBio').value = me.bio || ''; $('profPhone').value = me.phone || ''; $('profEmail').textContent = me.email;
-  $('profileDlg').classList.add('on');
+  $('profileDlg').classList.add('on'); renderSecurity();
 }
+async function renderSecurity() {
+  $('twofaBox').innerHTML = me.totp
+    ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>✅ Two-step verification is <b>on</b></span><input id="totpOff" placeholder="Code" inputmode="numeric" maxlength="6" style="width:90px"><button class="btn ghost" onclick="disable2fa()">Turn off</button></div>`
+    : `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span>Two-step verification is <b>off</b></span><button class="btn ghost" onclick="setup2fa()">Set up with authenticator app</button></div><div id="totpSetup"></div>`;
+  try { const ss = await api('/api/me/sessions'); $('sessList').innerHTML = ss.map(x => `<div class="sessRow"><div class="grow"><b>${esc(x.device)}</b>${x.current ? ' <span class="muted">(this device)</span>' : ''}<div class="muted small">${esc(x.ip || '')} · last active ${fmtDay(x.last_seen)} ${fmtTime(x.last_seen)}</div></div>${x.current ? '' : `<button class="btn ghost" onclick="revokeSession('${x.id}')">Sign out</button>`}</div>`).join(''); } catch {}
+}
+async function setup2fa() {
+  try { const r = await api('/api/me/2fa/setup', { method: 'POST' });
+    $('totpSetup').innerHTML = `<div style="margin-top:10px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap"><img src="${r.qr}" style="width:150px;height:150px;border-radius:8px;background:#fff"><div class="small"><div>1. Open Google/Microsoft Authenticator and scan this code.<br>Or enter the key: <code>${r.secret}</code></div><div style="margin-top:8px;display:flex;gap:6px"><input id="totpOn" placeholder="6-digit code" inputmode="numeric" maxlength="6" style="width:120px"><button class="btn" onclick="enable2fa()">Turn on</button></div></div></div>`;
+  } catch (e) { toast(e.message); }
+}
+async function enable2fa() { try { await api('/api/me/2fa/enable', { method: 'POST', body: { code: $('totpOn').value } }); me.totp = true; localStorage.setItem('me', JSON.stringify(me)); toast('Two-step verification is on'); renderSecurity(); } catch (e) { toast(e.message); } }
+async function disable2fa() { try { await api('/api/me/2fa/disable', { method: 'POST', body: { code: $('totpOff').value } }); me.totp = false; localStorage.setItem('me', JSON.stringify(me)); toast('Two-step verification is off'); renderSecurity(); } catch (e) { toast(e.message); } }
+async function revokeSession(id) { await api(`/api/me/sessions/${id}`, { method: 'DELETE' }).catch(e => toast(e.message)); renderSecurity(); }
+async function revokeAll() { await api('/api/me/sessions/revoke-all', { method: 'POST' }).catch(e => toast(e.message)); toast('Signed out everywhere else'); renderSecurity(); }
 async function saveProfile() {
   try { me = await api('/api/me', { method: 'PATCH', body: { name: $('profName').value, title: $('profTitle').value, bio: $('profBio').value, phone: $('profPhone').value } }); localStorage.setItem('me', JSON.stringify(me)); renderMe(); closeDlg('profileDlg'); toast('Profile saved'); }
   catch (e) { toast(e.message); }
@@ -112,6 +137,7 @@ function connectSocket() {
   socket.on('read', ({ chatId, userId, messageId }) => { if (cur?.id === chatId) { const mem = cur.members.find(x => x.id === userId); if (mem) mem.last_read = Math.max(mem.last_read, messageId); renderSeen(); } });
   socket.on('typing', ({ chatId, userId, name, typing }) => { if (cur?.id !== chatId) return; if (typing) typers[userId] = name; else delete typers[userId]; renderTyping(); });
   socket.on('call:incoming', showIncoming);
+  socket.on('admin:pending', () => { if (me.role === 'admin') { toast('New sign-up waiting for approval'); loadAdminBadge(); } });
   socket.on('call:declined', ({ by }) => toast(`${by} declined the call`));
   socket.on('call:state', ({ chatId, count }) => { const c = chats.find(x => x.id === chatId); if (c) { c.inCall = count; renderChats(); } if (cur?.id === chatId) refreshHeader(); });
 }
@@ -126,11 +152,11 @@ function setNav(n) {
   nav = n; document.querySelectorAll('[data-nav]').forEach(b => b.classList.toggle('on', b.dataset.nav === n));
   if (n === 'recordings') return openRecordings();
   if (document.body.classList.contains('inchat') && !cur) closeChat();
-  $('sideTitle').textContent = { chats: 'Chat', teams: 'Teams', people: 'People', meetings: 'Meetings', files: 'Files' }[n];
-  for (const [id, show] of [['chatList', n === 'chats' || n === 'teams'], ['peopleList', n === 'people'], ['meetList', n === 'meetings'], ['fileList', n === 'files']]) $(id).classList.toggle('hidden', !show);
+  $('sideTitle').textContent = { chats: 'Chat', teams: 'Teams', people: 'People', meetings: 'Meetings', files: 'Files', admin: 'Admin' }[n];
+  for (const [id, show] of [['chatList', n === 'chats' || n === 'teams'], ['peopleList', n === 'people'], ['meetList', n === 'meetings'], ['fileList', n === 'files'], ['adminList', n === 'admin']]) $(id).classList.toggle('hidden', !show);
   $('chips').classList.toggle('hidden', n !== 'chats');
   $('sideSearch').placeholder = { people: 'Search people…', files: 'Search files…', meetings: 'Search meetings…' }[n] || 'Search conversations…';
-  if (n === 'people') renderPeople(); else if (n === 'meetings') renderMeetings(); else if (n === 'files') renderFiles(); else renderChats();
+  if (n === 'people') renderPeople(); else if (n === 'meetings') renderMeetings(); else if (n === 'files') renderFiles(); else if (n === 'admin') renderAdmin(); else renderChats();
   if (window.innerWidth < 800) { document.body.classList.remove('inchat'); }
 }
 function setFilter(f, btn) { filter = f; document.querySelectorAll('#chips button').forEach(b => b.classList.toggle('on', b === btn)); renderChats(); }
@@ -143,6 +169,25 @@ function renderMeetings() {
     ${live.length ? live.map(c => `<div class="meetcard"><div class="mt">${esc(c.name)}</div><div class="ms">● ${c.inCall} in the call</div><button class="btn saffron" onclick="startCall(${c.id}, false, true)">Join</button></div>`).join('') : '<div class="muted small" style="padding:8px 20px 14px">No live meetings right now.</div>'}
     <div class="sec" style="padding:8px 20px 2px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Start a meeting</div>
     ${teams.map(c => `<div class="row" onclick="startCall(${c.id}, true, true)">${avatarHtml(c.name, c.color, { sq: true })}<div class="grow"><div class="name">${esc(c.name)}</div><div class="sub">${c.members.length} members · tap to start and ring everyone</div></div><svg class="i" style="color:var(--navy)"><use href="#i-video"/></svg></div>`).join('') || '<div class="muted small" style="padding:8px 20px">Create a team first (pencil icon in Chat).</div>'}`;
+}
+async function renderAdmin() {
+  let a; try { a = await api('/api/admin'); } catch (e) { return $('adminList').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  const tag = (u) => `<span class="tag ${u.status !== 'active' ? u.status : u.role}">${u.status !== 'active' ? u.status : u.role}</span>`;
+  $('adminList').innerHTML = `
+    <div class="card2" style="margin:12px"><h4>Sign-ups</h4>
+      <label class="chk"><input type="radio" name="su" value="open" ${a.signup === 'open' ? 'checked' : ''} onchange="setSignup('open')"> Open — anyone with the link can create an account</label>
+      <label class="chk"><input type="radio" name="su" value="approval" ${a.signup === 'approval' ? 'checked' : ''} onchange="setSignup('approval')"> Approval — new accounts wait for an admin</label></div>
+    ${a.pending.length ? `<div class="sec" style="padding:8px 20px 2px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">Waiting for approval (${a.pending.length})</div>` + a.pending.map(u => `<div class="adminRow">${avatarHtml(u.name, u.color)}<div class="grow"><div style="font-weight:600">${esc(u.name)}</div><div class="muted small">${esc(u.email)} · ${fmtDay(u.created)}</div></div><button class="btn" onclick="adminAct(${u.id},'approve')">Approve</button><button class="btn danger" onclick="adminAct(${u.id},'delete')">Reject</button></div>`).join('') : ''}
+    <div class="sec" style="padding:8px 20px 2px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px">All users (${a.users.length})</div>
+    ${a.users.map(u => `<div class="adminRow">${avatarHtml(u.name, u.color, { online: u.online })}<div class="grow" style="min-width:0"><div style="font-weight:600">${esc(u.name)} ${tag(u)}</div><div class="muted small">${esc(u.email)}</div></div>
+      ${u.id === me.id ? '<span class="muted small">you</span>' : `<button class="btn ghost" onclick="adminAct(${u.id},'role','${u.role === 'admin' ? 'member' : 'admin'}')">${u.role === 'admin' ? 'Make member' : 'Make admin'}</button>
+      ${u.status === 'disabled' ? `<button class="btn ghost" onclick="adminAct(${u.id},'enable')">Enable</button>` : u.status === 'active' ? `<button class="btn ghost" onclick="adminAct(${u.id},'disable')">Disable</button>` : ''}
+      <button class="btn danger" onclick="if(confirm('Delete this user and everything they sent?'))adminAct(${u.id},'delete')">Delete</button>`}</div>`).join('')}`;
+}
+async function setSignup(v) { await api('/api/admin/settings', { method: 'POST', body: { signup: v } }).catch(e => toast(e.message)); toast(v === 'approval' ? 'New sign-ups now need your approval' : 'Sign-ups are open'); }
+async function adminAct(uid, act, role) {
+  try { if (act === 'delete') await api(`/api/admin/users/${uid}`, { method: 'DELETE' }); else await api(`/api/admin/users/${uid}/${act}`, { method: 'POST', body: { role } }); renderAdmin(); loadAdminBadge(); loadPeople(); }
+  catch (e) { toast(e.message); }
 }
 let allFiles = [];
 async function renderFiles() {
@@ -165,7 +210,9 @@ async function loadPeople() { people = await api('/api/users'); renderPeople(); 
 function renderChats() {
   updateUnread();
   const q = ($('sideSearch')?.value || '').trim().toLowerCase();
-  let list = chats.filter(c => !c.guest);
+  const isReq = (c) => c.status === 'pending' && c.requestedBy !== me.id;
+  const nReq = chats.filter(isReq).length; $('reqChip').classList.toggle('hidden', !nReq); $('chipReq').textContent = nReq; $('chipReq').classList.toggle('hidden', !nReq);
+  let list = chats.filter(c => !c.guest && (filter === 'requests' ? isReq(c) : !isReq(c)));
   if (nav === 'teams') list = list.filter(c => c.kind === 'team');
   if (filter === 'unread') list = list.filter(c => c.unread > 0);
   if (filter === 'groups') list = list.filter(c => c.kind === 'team');
@@ -174,9 +221,9 @@ function renderChats() {
     <div class="row${cur?.id === c.id ? ' on' : ''}" onclick="openChat(${c.id})">
       ${avatarHtml(c.name, c.color, { sq: c.kind === 'team', online: c.kind === 'dm' ? c.online : undefined, avatar: c.avatar })}
       <div class="grow"><div class="name">${esc(c.name)}${c.inCall ? ' <span class="badge" style="background:var(--ok)">● ' + c.inCall + ' in call</span>' : ''}</div>
-        <div class="sub">${c.last ? (c.last.deleted ? '<i>message deleted</i>' : esc((c.last.user_id === me.id ? 'You: ' : (c.kind === 'team' && c.last.user_name ? c.last.user_name + ': ' : '')) + (c.last.text || (c.last.duration ? '🎙 Voice note' : c.last.file_name ? '📎 ' + c.last.file_name : '')))) : (c.kind === 'team' ? c.members.length + ' members' : 'Say hi')}</div></div>
+        <div class="sub">${c.status === 'pending' ? (c.requestedBy === me.id ? '<i>Request sent</i>' : '<b style="color:var(--saffron-2)">Message request</b>') : ''}${c.status === 'pending' ? ' · ' : ''}${c.last ? (c.last.deleted ? '<i>message deleted</i>' : esc((c.last.user_id === me.id ? 'You: ' : (c.kind === 'team' && c.last.user_name ? c.last.user_name + ': ' : '')) + (c.last.text || (c.last.duration ? '🎙 Voice note' : c.last.file_name ? '📎 ' + c.last.file_name : '')))) : (c.kind === 'team' ? c.members.length + ' members' : 'Say hi')}</div></div>
       <div class="meta">${c.last ? fmtTime(c.last.ts) : ''}${c.unread ? `<span class="badge">${c.unread}</span>` : ''}</div>
-    </div>`).join('') : `<div class="empty">${chats.length ? 'Nothing matches.' : (nav === 'teams' ? 'No teams yet.<br>Tap the pencil to create one.' : 'No chats yet.<br>Tap the pencil to start one.')}</div>`;
+    </div>`).join('') : `<div class="empty">${filter === 'requests' ? 'No message requests.' : nReq && chats.length === nReq ? `${nReq} message request${nReq > 1 ? 's' : ''} waiting — see Requests.` : chats.length ? 'Nothing matches.' : (nav === 'teams' ? 'No teams yet.<br>Tap the pencil to create one.' : 'No chats yet.<br>Tap the pencil to start one.')}</div>`;
 }
 function renderPeople() {
   const q = ($('sideSearch')?.value || '').trim().toLowerCase();
@@ -210,6 +257,7 @@ async function renderPanel() {
   $('pName').textContent = c.name;
   $('pSub').textContent = c.kind === 'dm' ? (other?.title || (c.online ? 'Online' : 'Offline')) : `${c.members.length} members`;
   
+  $('pBlockBtn').classList.toggle('hidden', c.kind !== 'dm'); $('pBlockText').textContent = c.blocked ? 'Unblock' : 'Block';
   // profile card
   const kv = (icon, k, v) => v ? `<div class="kv"><svg class="i"><use href="#${icon}"/></svg><div><div class="k">${k}</div><div class="v">${esc(v)}</div></div></div>` : '';
   if (other) {
@@ -240,6 +288,16 @@ function refreshHeader() {
   
   if (c.inCall) $('chatSub').textContent = `● ${c.inCall} in call · ` + $('chatSub').textContent;
   if ($('panel').classList.contains('on')) renderPanel();
+  const bar = $('reqbar'); bar.classList.add('hidden'); document.querySelector('#chatView .composer').classList.remove('hidden');
+  if (c.kind === 'dm' && c.blocked) { bar.innerHTML = `You blocked ${esc(c.name)}. <button class="btn ghost" onclick="toggleBlock()">Unblock</button>`; bar.classList.remove('hidden'); document.querySelector('#chatView .composer').classList.add('hidden'); }
+  else if (c.status === 'pending' && c.requestedBy !== me.id) { bar.innerHTML = `<b>${esc(c.name)}</b> wants to chat with you. Accept to let them see you're online and to reply. <button class="btn" onclick="acceptRequest()">Accept</button><button class="btn danger" onclick="toggleBlock()">Block</button>`; bar.classList.remove('hidden'); document.querySelector('#chatView .composer').classList.add('hidden'); }
+  else if (c.status === 'pending') { bar.innerHTML = `Request sent — ${esc(c.name)} will see your messages once they accept.`; bar.classList.remove('hidden'); }
+}
+async function acceptRequest() { await api(`/api/chats/${cur.id}/accept`, { method: 'POST' }).catch(e => toast(e.message)); await Promise.all([loadChats(), loadPeople()]); refreshHeader(); }
+async function toggleBlock() {
+  const other = cur.members.find(m => m.id !== me.id); if (!other) return;
+  const c = chats.find(x => x.id === cur.id);
+  try { await api(`/api/users/${other.id}/block`, { method: c.blocked ? 'DELETE' : 'POST' }); await Promise.all([loadChats(), loadPeople()]); refreshHeader(); toast(c.blocked ? 'Unblocked' : 'Blocked'); } catch (e) { toast(e.message); }
 }
 function renderMsgs(scrollHard) {
   const el = $('msgs'); const atBottom = scrollHard || el.scrollTop + el.clientHeight >= el.scrollHeight - 80;
