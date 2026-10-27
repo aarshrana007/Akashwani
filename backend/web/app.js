@@ -76,7 +76,7 @@ async function boot() {
 }
 function renderMe() {
   for (const id of ['meAvatar', 'meAvatar2', 'meAvatarTop']) { const el = $(id); if (el) el.outerHTML = avatarHtml(me.name, me.color, { avatar: me.avatar }).replace('class="avatar"', `class="avatar" id="${id}"`); }
-  $('meName').textContent = me.name; $('meNameRail').textContent = me.name; $('meEmail').textContent = me.email;
+  $('meName').textContent = me.name; $('meNameRail').textContent = me.name; $('meTitle').textContent = me.title || 'Set your title in profile';
 }
 async function openProfile() {
   $('profAvatar').outerHTML = avatarHtml(me.name, me.color, { avatar: me.avatar }).replace('class="avatar"', 'class="avatar" id="profAvatar" style="width:72px;height:72px;font-size:26px;background:' + me.color + '"');
@@ -97,7 +97,7 @@ async function uploadAvatar(file) {
 function connectSocket() {
   socket = io({ auth: { token }, extraHeaders: { 'ngrok-skip-browser-warning': '1' } });
   socket.on('connect_error', (e) => { if (e.message === 'unauthorised') logout(); });
-  socket.on('chats:changed', loadChats);
+  socket.on('chats:changed', () => { loadChats(); loadPeople(); });
   socket.on('users:changed', async () => { await loadPeople(); try { me = await api('/api/me'); localStorage.setItem('me', JSON.stringify(me)); renderMe(); } catch {} loadChats(); });
   socket.on('members:changed', ({ chatId }) => { loadChats(); if (cur?.id === chatId) refreshHeader(); });
   socket.on('presence', ({ userId, online }) => { people.forEach(p => { if (p.id === userId) p.online = online; }); chats.forEach(c => { if (c.otherId === userId) c.online = online; }); renderPeople(); renderChats(); if (cur) refreshHeader(); });
@@ -165,7 +165,7 @@ async function loadPeople() { people = await api('/api/users'); renderPeople(); 
 function renderChats() {
   updateUnread();
   const q = ($('sideSearch')?.value || '').trim().toLowerCase();
-  let list = chats;
+  let list = chats.filter(c => !c.guest);
   if (nav === 'teams') list = list.filter(c => c.kind === 'team');
   if (filter === 'unread') list = list.filter(c => c.unread > 0);
   if (filter === 'groups') list = list.filter(c => c.kind === 'team');
@@ -183,10 +183,10 @@ function renderPeople() {
   const list = q ? people.filter(p => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q)) : people;
   $('peopleList').innerHTML = list.length ? list.map(p => `
     <div class="row" onclick="openDm(${p.id})">${avatarHtml(p.name, p.color, { online: p.online, avatar: p.avatar })}
-      <div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${p.online ? '<span style="color:var(--ok)">● Online</span>' : 'Offline'}${p.title ? ' · ' + esc(p.title) : ''} · ${esc(p.email)}</div></div></div>`).join('')
-    : '<div class="empty">Nobody else has signed up yet.<br>Share your link!</div>';
+      <div class="grow"><div class="name">${esc(p.name)}</div><div class="sub">${p.online ? '<span style="color:var(--ok)">● Online</span>' : 'Offline'}${p.title ? ' · ' + esc(p.title) : ''}</div></div></div>`).join('')
+    : '<div class="empty">People you chat with appear here.<br>Tap the pencil and add someone by email.</div>';
 }
-async function openDm(userId) { const c = await api('/api/chats/dm', { method: 'POST', body: { userId } }); await loadChats(); openChat(c.id); }
+async function openDm(userId) { const c = await api('/api/chats/dm', { method: 'POST', body: { userId } }); await Promise.all([loadChats(), loadPeople()]); openChat(c.id); }
 
 // ---------- chat view ----------
 async function openChat(id) {
@@ -209,7 +209,7 @@ async function renderPanel() {
   $('pAvatar').style.width = $('pAvatar').style.height = '56px'; $('pAvatar').style.fontSize = '20px';
   $('pName').textContent = c.name;
   $('pSub').textContent = c.kind === 'dm' ? (other?.title || (c.online ? 'Online' : 'Offline')) : `${c.members.length} members`;
-  $('pAddBtn').classList.toggle('hidden', c.kind !== 'team');
+  
   // profile card
   const kv = (icon, k, v) => v ? `<div class="kv"><svg class="i"><use href="#${icon}"/></svg><div><div class="k">${k}</div><div class="v">${esc(v)}</div></div></div>` : '';
   if (other) {
@@ -219,7 +219,7 @@ async function renderPanel() {
   } else {
     $('pProfileCard').classList.add('hidden'); $('pMembersCard').classList.remove('hidden');
     $('pMembersTitle').textContent = `Members (${c.members.length})`;
-    $('pMembers').innerHTML = c.members.map(m => `<div class="mrow">${avatarHtml(m.name, m.color, { online: m.id === me.id ? true : (people.find(p => p.id === m.id)?.online), avatar: m.avatar })}<div class="grow"><div style="font-weight:600">${esc(m.name)}${m.id === me.id ? ' (you)' : ''}</div><div class="muted small">${esc(m.title || m.email)}</div></div></div>`).join('');
+    $('pMembers').innerHTML = c.members.map(m => `<div class="mrow">${avatarHtml(m.name, m.color, { online: m.id === me.id ? true : (people.find(p => p.id === m.id)?.online), avatar: m.avatar })}<div class="grow"><div style="font-weight:600">${esc(m.name)}${m.id === me.id ? ' (you)' : ''}</div><div class="muted small">${esc(m.title || '')}</div></div></div>`).join('');
   }
   // files
   let files = []; try { files = await api(`/api/chats/${c.id}/files`); } catch {}
@@ -237,7 +237,7 @@ function refreshHeader() {
   $('chatAvatar').outerHTML = avatarHtml(c.name, c.color, { sq: c.kind === 'team', online: c.kind === 'dm' ? c.online : undefined, avatar: other?.avatar }).replace('class="avatar', 'id="chatAvatar" class="avatar');
   $('chatTitle').textContent = c.name;
   $('chatSub').textContent = c.kind === 'dm' ? [other?.title, c.online ? 'Online' : 'Offline'].filter(Boolean).join(' · ') : c.members.map(m => m.name).join(', ');
-  $('addMemberBtn').classList.toggle('hidden', c.kind !== 'team');
+  
   if (c.inCall) $('chatSub').textContent = `● ${c.inCall} in call · ` + $('chatSub').textContent;
   if ($('panel').classList.contains('on')) renderPanel();
 }
@@ -372,23 +372,47 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.gsearch')) $
 
 // ---------- new chat / members ----------
 function pickList(el, list) { el.innerHTML = list.length ? list.map(p => `<label><input type="checkbox" value="${p.id}">${avatarHtml(p.name, p.color, { online: p.online })}<span>${esc(p.name)}</span></label>`).join('') : '<div class="muted" style="padding:10px">Nobody else has signed up yet.</div>'; }
-function openNew() { $('newTeamName').value = ''; pickList($('newPick'), people); $('newDlg').classList.add('on'); }
+let found = [];
+function openNew() { $('newTeamName').value = ''; $('newEmail').value = ''; $('newFound').innerHTML = ''; found = []; pickList($('newPick'), people); $('newDlg').classList.add('on'); }
+async function lookupEmail() {
+  const email = $('newEmail').value.trim(); if (!email) return;
+  try { const u = await api('/api/users/lookup', { method: 'POST', body: { email } }); if (!found.some(f => f.id === u.id)) found.push(u); $('newEmail').value = '';
+    $('newFound').innerHTML = found.map(u => `<label style="display:flex;align-items:center;gap:10px;padding:6px 0"><input type="checkbox" value="${u.id}" checked>${avatarHtml(u.name, u.color, { avatar: u.avatar })}<span>${esc(u.name)}</span></label>`).join('');
+  } catch (e) { toast(e.message); }
+}
 function closeDlg(id) { $(id).classList.remove('on'); }
 async function createNew() {
-  const ids = [...$('newPick').querySelectorAll('input:checked')].map(i => +i.value); const name = $('newTeamName').value.trim();
+  const ids = [...$('newPick').querySelectorAll('input:checked'), ...$('newFound').querySelectorAll('input:checked')].map(i => +i.value); const name = $('newTeamName').value.trim();
   try {
     let c;
     if (name) c = await api('/api/chats/team', { method: 'POST', body: { name, memberIds: ids } });
     else if (ids.length === 1) c = await api('/api/chats/dm', { method: 'POST', body: { userId: ids[0] } });
     else return toast('Enter a team name, or pick exactly one person for a direct chat');
-    closeDlg('newDlg'); await loadChats(); openChat(c.id);
+    closeDlg('newDlg'); await Promise.all([loadChats(), loadPeople()]); openChat(c.id);
   } catch (e) { toast(e.message); }
 }
-function openAddMember() { pickList($('memberPick'), people.filter(p => !cur.members.some(m => m.id === p.id))); $('memberDlg').classList.add('on'); }
-async function addMembers() {
-  for (const i of $('memberPick').querySelectorAll('input:checked')) await api(`/api/chats/${cur.id}/members`, { method: 'POST', body: { userId: +i.value } }).catch(e => toast(e.message));
-  closeDlg('memberDlg'); await loadChats(); refreshHeader();
+let memberFound = [], memberMode = 'chat';
+function openAddMember(mode = 'chat') {
+  memberMode = mode; memberFound = []; $('memberFound').innerHTML = ''; $('memberEmail').value = '';
+  const c = mode === 'call' ? callChat : cur;
+  $('memberTitle').textContent = mode === 'call' ? 'Add people to this call' : 'Add people';
+  $('memberHint').textContent = mode === 'call' ? 'They will be rung and join this call.' : c.kind === 'dm' ? 'This starts a new group chat with everyone.' : '';
+  pickList($('memberPick'), people.filter(p => !c.members.some(m => m.id === p.id))); $('memberDlg').classList.add('on');
 }
+async function lookupMemberEmail() {
+  const email = $('memberEmail').value.trim(); if (!email) return;
+  try { const u = await api('/api/users/lookup', { method: 'POST', body: { email } }); if (!memberFound.some(f => f.id === u.id)) memberFound.push(u); $('memberEmail').value = '';
+    $('memberFound').innerHTML = memberFound.map(u => `<label style="display:flex;align-items:center;gap:10px;padding:6px 0"><input type="checkbox" value="${u.id}" checked>${avatarHtml(u.name, u.color, { avatar: u.avatar })}<span>${esc(u.name)}</span></label>`).join('');
+  } catch (e) { toast(e.message); }
+}
+async function addMembers() {
+  const ids = [...$('memberPick').querySelectorAll('input:checked'), ...$('memberFound').querySelectorAll('input:checked')].map(i => +i.value);
+  closeDlg('memberDlg'); if (!ids.length) return;
+  if (memberMode === 'call') { socket.emit('call:invite', { chatId: callChat.id, userIds: ids }); return toast('Ringing…'); }
+  try { const r = await api(`/api/chats/${cur.id}/members`, { method: 'POST', body: { userIds: ids } }); await Promise.all([loadChats(), loadPeople()]); if (r.created) openChat(r.chatId); else refreshHeader(); }
+  catch (e) { toast(e.message); }
+}
+function openCallInvite() { openAddMember('call'); }
 
 // ---------- calls ----------
 const LK = window.LivekitClient;
@@ -465,7 +489,7 @@ async function flip() { const pub = room.localParticipant.getTrackPublication(LK
 async function toggleShare() { try { const on = !room.localParticipant.isScreenShareEnabled; await room.localParticipant.setScreenShareEnabled(on, { audio: true }); $('shareBtn').classList.toggle('on', room.localParticipant.isScreenShareEnabled); } catch (e) { if (e.name !== 'NotAllowedError') toast('Share: ' + e.message); } }
 async function toggleHand() { handUp = !handUp; $('handBtn').classList.toggle('on', handUp); document.querySelector('.tile.local.cam .hand')?.classList.toggle('hidden', !handUp); await sendData({ type: 'hand', up: handUp }); }
 async function hangup() { if (recording) await browserRec.stop().catch(() => {}); await room?.disconnect(); endCall(); }
-function endCall() { if (callChat) socket.emit('call:left', { chatId: callChat.id }); room = null; callChat = null; $('call').classList.remove('on'); document.querySelectorAll('audio[data-p]').forEach(a => a.remove()); }
+function endCall() { if (callChat) socket.emit('call:left', { chatId: callChat.id }); if (callChat?.guest) { chats = chats.filter(c => !c.guest); renderChats(); } room = null; callChat = null; $('call').classList.remove('on'); document.querySelectorAll('audio[data-p]').forEach(a => a.remove()); }
 
 // incoming
 function showIncoming(d) {
@@ -477,7 +501,7 @@ function showIncoming(d) {
 }
 function notifyCall(d) { if (!document.hasFocus() && 'Notification' in window && Notification.permission === 'granted') try { new Notification('Incoming call', { body: d.kind === 'dm' ? d.from : `${d.from} · ${d.name}`, tag: 'call' }); } catch {} }
 function dismissIncoming() { incomingCall = null; $('incoming').classList.remove('on'); stopRing(); }
-async function acceptCall() { const d = incomingCall; dismissIncoming(); if (!chats.find(c => c.id === d.chatId)) await loadChats(); startCall(d.chatId, false, d.video !== false); }
+async function acceptCall() { const d = incomingCall; dismissIncoming(); if (!chats.find(c => c.id === d.chatId)) await loadChats(); if (!chats.find(c => c.id === d.chatId)) chats.push({ id: d.chatId, kind: d.kind, name: d.name, members: [], guest: true }); startCall(d.chatId, false, d.video !== false); }
 function declineCall() { socket.emit('call:decline', { chatId: incomingCall.chatId, toId: incomingCall.fromId }); dismissIncoming(); }
 function startRing() {
   try {

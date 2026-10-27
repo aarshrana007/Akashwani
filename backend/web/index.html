@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 <div id="splash"><img src="icon.svg" alt=""><div>Akashwani</div></div>
@@ -113,7 +113,7 @@
         <div class="list hidden" id="peopleList"></div>
         <div class="list hidden" id="meetList"></div>
         <div class="list hidden" id="fileList"></div>
-        <div class="me"><div class="avatar" id="meAvatar2"></div><div class="grow"><div id="meName" style="font-weight:700;color:var(--navy)"></div><div class="muted small" id="meEmail"></div></div><button class="ib" title="Sign out" onclick="logout()"><svg class="i"><use href="#i-out"/></svg></button></div>
+        <div class="me"><div class="avatar" id="meAvatar2"></div><div class="grow"><div id="meName" style="font-weight:700;color:var(--navy)"></div><div class="muted small" id="meTitle"></div></div><button class="ib" title="Sign out" onclick="logout()"><svg class="i"><use href="#i-out"/></svg></button></div>
       </div>
 
       <div id="main">
@@ -141,7 +141,7 @@
             <input type="file" id="fileIn" class="hidden" multiple onchange="sendFiles(this.files);this.value=''">
             <button class="ib" id="voiceBtn" title="Voice note" onclick="voice.toggle()"><svg class="i"><use href="#i-mic"/></svg></button>
             <div class="inputwrap"><textarea id="msgIn" rows="1" placeholder="Type a message…"></textarea><button class="ib emojiBtn" onclick="toggleEmoji()"><svg class="i"><use href="#i-smile"/></svg></button><div id="emojiPick" class="hidden"></div></div>
-            <button class="btn saffron sendBtn" onclick="send()"><svg class="i"><use href="#i-mail"/></svg></button>
+            <button class="btn saffron sendBtn" onclick="send()"><svg class="i"><use href="#i-send"/></svg></button>
           </div>
         </div>
         <div id="recView" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0">
@@ -190,6 +190,7 @@
     <button id="shareBtn" class="hideMobile" onclick="toggleShare()">🖥<span>Share</span></button>
     <button id="handBtn" onclick="toggleHand()">✋<span>Hand</span></button>
     <button id="layoutBtn" onclick="toggleLayout()">▦<span>Layout</span></button>
+    <button onclick="openCallInvite()">👤<span>Add</span></button>
     <button id="recBtn" onclick="toggleRec()">⏺<span>Record</span></button>
     <button class="d" onclick="hangup()">📵<span>Leave</span></button>
   </div>
@@ -203,13 +204,17 @@
 <div class="overlay" id="newDlg"><div class="card">
   <h3>New conversation</h3>
   <input id="newTeamName" placeholder="Team name (leave blank for a direct chat)">
-  <div class="muted small">Pick people</div>
+  <div class="muted small">Pick from people you already chat with</div>
   <div class="picklist" id="newPick"></div>
+  <div class="muted small">…or add someone new by their email</div>
+  <div style="display:flex;gap:8px"><input id="newEmail" type="email" placeholder="name@example.com" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupEmail()}"><button class="btn ghost" onclick="lookupEmail()">Find</button></div>
+  <div id="newFound"></div>
   <div class="actions"><button class="btn ghost" onclick="closeDlg('newDlg')">Cancel</button><button class="btn" onclick="createNew()">Create</button></div>
 </div></div>
 
 <div class="overlay" id="memberDlg"><div class="card">
-  <h3>Add people</h3><div class="picklist" id="memberPick"></div>
+  <h3 id="memberTitle">Add people</h3><div class="muted small" id="memberHint"></div><div class="picklist" id="memberPick"></div>
+  <div style="display:flex;gap:8px"><input id="memberEmail" type="email" placeholder="…or add by email" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupMemberEmail()}"><button class="btn ghost" onclick="lookupMemberEmail()">Find</button></div><div id="memberFound"></div>
   <div class="actions"><button class="btn ghost" onclick="closeDlg('memberDlg')">Cancel</button><button class="btn" onclick="addMembers()">Add</button></div>
 </div></div>
 
@@ -239,6 +244,6 @@
 
 <script src="livekit-client.umd.js"></script>
 <script src="/socket.io/socket.io.js"></script>
-<script src="app.js?v=11"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

@@ -26,6 +26,10 @@ const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 1e6 });
 app.set('trust proxy', true);
 app.use(cors());
+app.use((req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Permissions-Policy', 'geolocation=()'); next(); });
+// simple rate limit for auth endpoints: 20 attempts / 10 min per IP
+const hits = new Map();
+const limit = (req, res, next) => { const k = req.ip + req.path, t = now(), h = (hits.get(k) || []).filter(x => t - x < 600000); h.push(t); hits.set(k, h); return h.length > 20 ? bad(res, 429, 'too many attempts — try again later') : next(); };
 
 // Local-LiveKit mode: proxy signalling through this server so one URL works through a tunnel.
 const lkProxy = createProxyMiddleware({ pathFilter: '/rtc', target: LIVEKIT_URL.replace(/^ws/, 'http'), ws: true, changeOrigin: true });
@@ -65,7 +69,7 @@ const mailer = process.env.SMTP_USER && process.env.SMTP_PASS
   : null;
 const pendingCodes = new Map(); // email -> { code, exp, tries }
 const EMAIL_RE = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/;
-app.post('/auth/send-code', async (req, res) => {
+app.post('/auth/send-code', limit, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const purpose = req.body?.purpose === 'reset' ? 'reset' : 'register';
   if (!EMAIL_RE.test(email)) return bad(res, 400, 'enter a valid email address');
@@ -92,7 +96,7 @@ function checkCode(purpose, email, code) {
   pendingCodes.delete(key); return null;
 }
 
-app.post('/auth/reset', (req, res) => {
+app.post('/auth/reset', limit, (req, res) => {
   const { email: rawEmail, password, code } = req.body || {};
   const email = String(rawEmail || '').trim().toLowerCase();
   const u = D.userByEmail.get(email); if (!u) return bad(res, 404, 'no account with that email');
@@ -104,7 +108,7 @@ app.post('/auth/reset', (req, res) => {
   res.json({ token: sign(fresh), user: pub(fresh) });
 });
 
-app.post('/auth/register', (req, res) => {
+app.post('/auth/register', limit, (req, res) => {
   const { email: rawEmail, name, password, code } = req.body || {};
   const email = String(rawEmail || '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return bad(res, 400, 'enter a valid email address');
@@ -117,7 +121,7 @@ app.post('/auth/register', (req, res) => {
   io.emit('users:changed');
   res.json({ token: sign(u), user: pub(u) });
 });
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', limit, (req, res) => {
   const { email, password } = req.body || {};
   const u = D.userByEmail.get((email || '').toLowerCase());
   if (!u || hash(password || '', u.salt) !== u.pass_hash) return bad(res, 401, 'wrong email or password');
@@ -139,7 +143,10 @@ app.post('/api/me/avatar', express.raw({ type: 'image/*', limit: '5mb' }), (req,
   fs.mkdirSync(path.join(FILES_DIR, 'avatars'), { recursive: true }); fs.writeFileSync(path.join(FILES_DIR, file), req.body);
   D.updateAvatar.run('/files/' + file, req.user.id); io.emit('users:changed'); res.json(pub(D.userById.get(req.user.id)));
 });
-app.use('/files', (req, res, next) => (req.path.startsWith('/avatars/') ? next() : auth(req, res, next)), express.static(FILES_DIR));
+app.use('/files', (req, res, next) => (req.path.startsWith('/avatars/') ? next() : auth(req, res, next)), (req, res, next) => {
+  const m = req.path.match(/^\/chat-(\d+)\//); if (!m) return next();
+  return D.isMember.get(+m[1], req.user.id) ? next() : bad(res, 403, 'not a member');
+}, express.static(FILES_DIR));
 
 // ---------- attachments (files, images, voice notes) ----------
 app.post('/api/chats/:id/upload', member, express.raw({ type: '*/*', limit: '100mb' }), (req, res) => {
@@ -160,7 +167,12 @@ app.get('/api/files', (req, res) => res.json(D.myFiles.all(req.user.id).map(f =>
 
 // ---------- users / presence ----------
 const online = new Map(); // userId -> socket count
-app.get('/api/users', (req, res) => res.json(D.allUsers.all().filter(u => u.id !== req.user.id).map(u => ({ ...u, online: online.has(u.id) }))));
+app.get('/api/users', (req, res) => res.json(D.contacts.all(req.user.id, req.user.id).map(u => ({ ...u, online: online.has(u.id) }))));
+app.post('/api/users/lookup', (req, res) => { // find someone new by exact email
+  const u = D.userByEmail.get(String(req.body.email || '').trim().toLowerCase());
+  if (!u || u.id === req.user.id) return bad(res, 404, 'No account with that email');
+  res.json({ id: u.id, name: u.name, color: u.color, avatar: u.avatar, title: u.title });
+});
 
 // ---------- chats ----------
 function chatSummary(c, me) {
@@ -187,10 +199,19 @@ app.post('/api/chats/dm', (req, res) => {
   res.json(chatSummary({ ...D.chatById.get(id), unread: 0 }, req.user.id));
 });
 app.post('/api/chats/:id/members', member, (req, res) => {
-  const c = D.chatById.get(+req.params.id); if (c.kind !== 'team') return bad(res, 400, 'dm');
-  const u = D.userById.get(+req.body.userId); if (!u) return bad(res, 404, 'no user');
-  D.addMember.run(c.id, u.id, now()); emitUser(u.id, 'chats:changed'); emitChat(c.id, 'members:changed', { chatId: c.id });
-  res.json({ ok: true });
+  const c = D.chatById.get(+req.params.id);
+  const ids = [...new Set([].concat(req.body.userIds || [], req.body.userId ? [req.body.userId] : []).map(Number))].filter(id => D.userById.get(id));
+  if (!ids.length) return bad(res, 404, 'no user');
+  if (c.kind === 'team') {
+    for (const id of ids) { D.addMember.run(c.id, id, now()); emitUser(id, 'chats:changed'); }
+    emitChat(c.id, 'members:changed', { chatId: c.id }); return res.json({ ok: true, chatId: c.id });
+  }
+  // 1:1 chat → start a new group chat with everyone (like Teams)
+  const all = [...new Set([...D.memberIds.all(c.id).map(m => m.user_id), ...ids])];
+  const name = all.map(id => D.userById.get(id).name.split(' ')[0]).join(', ');
+  const nid = D.insertChat.run('team', name, req.user.id, now()).lastInsertRowid;
+  for (const id of all) { D.addMember.run(nid, id, now()); emitUser(id, 'chats:changed'); }
+  res.json({ ok: true, chatId: nid, created: true });
 });
 app.get('/api/chats/:id/messages', member, (req, res) => {
   const before = +req.query.before || Number.MAX_SAFE_INTEGER;
@@ -231,7 +252,9 @@ app.post('/api/chats/:id/read', member, (req, res) => {
 
 // ---------- calls ----------
 const callers = new Map(); // chatId -> Set(userId) currently in call
-app.get('/api/chats/:id/call-token', member, async (req, res) => {
+const callInvites = new Map(); // chatId -> Set(userId) invited into a call without being chat members
+const memberOrInvited = (req, res, next) => (D.isMember.get(+req.params.id, req.user.id) || callInvites.get(+req.params.id)?.has(req.user.id)) ? next() : bad(res, 403, 'not a member');
+app.get('/api/chats/:id/call-token', memberOrInvited, async (req, res) => {
   const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, { identity: String(req.user.id), name: req.user.name, ttl: '4h' });
   at.addGrant({ roomJoin: true, room: roomName(+req.params.id), canPublish: true, canSubscribe: true, canPublishData: true });
   const proto = req.protocol === 'https' ? 'wss' : 'ws';
@@ -274,8 +297,18 @@ io.on('connection', (socket) => {
     const c = D.chatById.get(+chatId); const name = c.kind === 'dm' ? me.name : c.name;
     for (const { user_id } of D.memberIds.all(+chatId)) if (user_id !== me.id && !callers.get(+chatId)?.has(user_id)) emitUser(user_id, 'call:incoming', { chatId: +chatId, from: me.name, fromId: me.id, name, kind: c.kind, video: !!video, avatar: me.avatar || null, color: me.color });
   });
+  socket.on('call:invite', ({ chatId, userIds }) => {
+    if (!D.isMember.get(+chatId, me.id) && !callInvites.get(+chatId)?.has(me.id)) return;
+    const c = D.chatById.get(+chatId); const name = c.kind === 'dm' ? me.name : c.name;
+    if (!callInvites.has(+chatId)) callInvites.set(+chatId, new Set());
+    for (const uid of (userIds || []).map(Number)) {
+      if (!D.userById.get(uid) || uid === me.id) continue;
+      if (!D.isMember.get(+chatId, uid)) callInvites.get(+chatId).add(uid);
+      emitUser(uid, 'call:incoming', { chatId: +chatId, from: me.name, fromId: me.id, name, kind: c.kind, video: true, avatar: me.avatar || null, color: me.color, invited: true });
+    }
+  });
   socket.on('call:joined', ({ chatId }) => { if (!callers.has(+chatId)) callers.set(+chatId, new Set()); callers.get(+chatId).add(me.id); socket.callChat = +chatId; emitChat(+chatId, 'call:state', { chatId: +chatId, count: callers.get(+chatId).size }); });
-  const leave = () => { const c = socket.callChat; if (c == null) return; callers.get(c)?.delete(me.id); if (!callers.get(c)?.size) callers.delete(c); emitChat(c, 'call:state', { chatId: c, count: callers.get(c)?.size || 0 }); socket.callChat = null; };
+  const leave = () => { const c = socket.callChat; if (c == null) return; callers.get(c)?.delete(me.id); if (!callers.get(c)?.size) { callers.delete(c); callInvites.delete(c); } emitChat(c, 'call:state', { chatId: c, count: callers.get(c)?.size || 0 }); socket.callChat = null; };
   socket.on('call:left', leave);
   socket.on('call:decline', ({ chatId, toId }) => emitUser(toId, 'call:declined', { chatId, by: me.name }));
 

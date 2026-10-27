@@ -47,6 +47,8 @@ module.exports = {
   updatePassword: q('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?'),
   userById: q('SELECT id,email,name,color,bio,phone,title,avatar FROM users WHERE id = ?'),
   allUsers: q('SELECT id,email,name,color,bio,phone,title,avatar FROM users ORDER BY name'),
+  contacts: q(`SELECT DISTINCT u.id,u.email,u.name,u.color,u.bio,u.phone,u.title,u.avatar FROM users u
+    JOIN chat_members a ON a.user_id = u.id JOIN chat_members b ON b.chat_id = a.chat_id AND b.user_id = ? WHERE u.id != ? ORDER BY u.name`),
   updateProfile: q('UPDATE users SET name = ?, bio = ?, phone = ?, title = ? WHERE id = ?'),
   updateAvatar: q('UPDATE users SET avatar = ? WHERE id = ?'),
   // chats
