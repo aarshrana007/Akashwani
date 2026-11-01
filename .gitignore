@@ -7,3 +7,5 @@ ios/
 android/
 .expo/
 files/
+deploy/data/
+deploy/.env

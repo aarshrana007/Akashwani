@@ -17,8 +17,9 @@ const {
   LIVEKIT_URL = 'ws://localhost:7880', LIVEKIT_API_KEY = 'devkey', LIVEKIT_API_SECRET = 'secretsecretsecretsecret',
   RECORDINGS_DIR = path.join(__dirname, 'recordings'), PORT = 4000,
 } = process.env;
-const JWT_SECRET = process.env.JWT_SECRET || (fs.existsSync(path.join(__dirname, '.jwt')) ? fs.readFileSync(path.join(__dirname, '.jwt'), 'utf8')
-  : (() => { const s = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(path.join(__dirname, '.jwt'), s); return s; })());
+const JWT_FILE = process.env.JWT_SECRET_FILE || path.join(__dirname, '.jwt');
+const JWT_SECRET = process.env.JWT_SECRET || (fs.existsSync(JWT_FILE) ? fs.readFileSync(JWT_FILE, 'utf8').trim()
+  : (() => { const s = crypto.randomBytes(32).toString('hex'); fs.writeFileSync(JWT_FILE, s); return s; })());
 const CLOUD = /^wss:\/\//.test(LIVEKIT_URL);
 fs.mkdirSync(RECORDINGS_DIR, { recursive: true });
 
@@ -57,7 +58,7 @@ const totpCode = (secret, step = 0) => { const t = Buffer.alloc(8); t.writeBigIn
 const totpOk = (secret, code) => [-1, 0, 1].some(st => totpCode(secret, st) === String(code || '').trim());
 async function sendMail(to, subject, text) { if (!mailer) { console.log(`\n>>> [mail to ${to}] ${subject}\n${text}\n`); return false; } try { await mailer.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text }); return true; } catch (e) { console.error('mail failed:', e.message); return false; } }
 const pub = (u) => ({ id: u.id, email: u.email, name: u.name, color: u.color, bio: u.bio || '', phone: u.phone || '', title: u.title || '', avatar: u.avatar || null, role: u.role || 'member', totp: !!u.totp });
-const FILES_DIR = path.join(__dirname, 'files'); fs.mkdirSync(FILES_DIR, { recursive: true });
+const FILES_DIR = process.env.FILES_DIR || path.join(__dirname, 'files'); fs.mkdirSync(FILES_DIR, { recursive: true });
 const safeName = (n) => String(n || 'file').replace(/[^\w.\-() ]+/g, '_').slice(0, 120);
 const extOf = (name, mime) => (path.extname(name || '').slice(1) || (mime || '').split('/')[1] || 'bin').replace(/[^\w]/g, '').slice(0, 8);
 const bad = (res, code, error) => res.status(code).json({ error });

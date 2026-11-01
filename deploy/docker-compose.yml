@@ -1,0 +1,16 @@
+# Akashwani on a VPS: app + Caddy (automatic HTTPS). Data lives in ./data on the host.
+services:
+  app:
+    build: { context: .., dockerfile: deploy/Dockerfile }
+    restart: unless-stopped
+    env_file: ../backend/.env
+    environment: { DB_FILE: /data/data.db, RECORDINGS_DIR: /data/recordings, FILES_DIR: /data/files, JWT_SECRET_FILE: /data/.jwt }
+    volumes: [ "./data:/data" ]
+    expose: [ "4000" ]
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: [ "80:80", "443:443", "443:443/udp" ]
+    environment: { DOMAIN: "${DOMAIN}" }
+    volumes: [ "./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config" ]
+volumes: { caddy_data: {}, caddy_config: {} }

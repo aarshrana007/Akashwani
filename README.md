@@ -88,3 +88,11 @@ Stop everything: Ctrl+C in both windows, then `docker compose down` in `backend`
 | GET | /recordings | | List with playback URLs |
 | POST | /webhooks/livekit | | LiveKit egress events |
 
+
+## Deploy to a VPS (always on, own domain, HTTPS)
+1. Buy a small Ubuntu VPS (Hetzner CX22 ~€4.5/mo or a DigitalOcean London droplet) and a domain; add an A record `akashwani.yourdomain.com → server IP`.
+2. SSH in as root and run: `curl -fsSL https://raw.githubusercontent.com/aarshrana007/Akashwani/main/deploy/deploy.sh | bash -s -- akashwani.yourdomain.com`
+3. `nano /opt/akashwani/backend/.env` → LiveKit keys, SMTP, APP_NAME; then `cd /opt/akashwani/deploy && docker compose up -d --build`
+4. Existing data: `docker compose stop app`, copy `data.db`, `files/`, `recordings/` into `/opt/akashwani/deploy/data/`, `docker compose start app`
+5. Backups: `(crontab -l; echo "0 2 * * * /opt/akashwani/deploy/backup.sh") | crontab -`
+Update: `cd /opt/akashwani && git pull && cd deploy && docker compose up -d --build`
