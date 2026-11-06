@@ -612,7 +612,7 @@ const browserRec = (() => {
   async function start() {
     canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; ctx = canvas.getContext('2d'); draw();
     const stream = new MediaStream([...canvas.captureStream(30).getVideoTracks(), ...(recOpts.audio ? mixAudio() : [])]);
-    mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find(m => window.MediaRecorder?.isTypeSupported(m));
+    mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => window.MediaRecorder?.isTypeSupported(m));
     if (!mime) throw new Error('This browser cannot record. Use Chrome/Edge on a laptop.');
     chunks = []; startedAt = Date.now(); rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2_500_000 });
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data); rec.start(1000);
@@ -622,9 +622,24 @@ const browserRec = (() => {
     await new Promise(r => { rec.onstop = r; rec.stop(); }); cancelAnimationFrame(raf); audioCtx?.close();
     await sendData({ type: 'recording', state: 'stopped' }); setRec(false);
     const blob = new Blob(chunks, { type: mime }), ext = mime.startsWith('video/mp4') ? 'mp4' : 'webm';
-    toast(`Uploading recording (${(blob.size / 1e6).toFixed(1)} MB)…`);
-    const r = await fetch(`/api/chats/${callChat.id}/recordings?ext=${ext}&startedAt=${startedAt}`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': '1' }, body: blob });
-    toast(r.ok ? 'Recording saved. See 🎞 Recordings.' : 'Upload failed.');
+    const name = `Akashwani-${(callChat.name || 'call').replace(/[^\w-]+/g, '_')}-${new Date(startedAt).toISOString().slice(0, 16).replace(/[T:]/g, '-')}.${ext}`;
+    // Ask where it should go: this device (default) and/or the chat
+    const choice = await new Promise(res => {
+      const o = document.createElement('div'); o.className = 'overlay on'; o.innerHTML = `<div class="card"><h3>Recording finished</h3><div class="muted small">${(blob.size / 1e6).toFixed(1)} MB · ${fmtDur((Date.now() - startedAt) / 1000)}</div>
+        <label class="chk"><input type="checkbox" id="rcDev" checked> Save to this device</label>
+        <label class="chk"><input type="checkbox" id="rcChat"> Share to the chat (uploads to the server)</label>
+        <div class="actions"><button class="btn ghost" id="rcDiscard">Discard</button><button class="btn" id="rcOk">Done</button></div></div>`;
+      document.body.appendChild(o);
+      o.querySelector('#rcOk').onclick = () => { res({ dev: o.querySelector('#rcDev').checked, chat: o.querySelector('#rcChat').checked }); o.remove(); };
+      o.querySelector('#rcDiscard').onclick = () => { if (confirm('Discard this recording?')) { res(null); o.remove(); } };
+    });
+    if (!choice) return;
+    if (choice.dev) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 10000); toast('Saved to your Downloads as ' + name); }
+    if (choice.chat) {
+      toast(`Uploading recording (${(blob.size / 1e6).toFixed(1)} MB)…`);
+      const r = await fetch(`/api/chats/${callChat.id}/recordings?ext=${ext}&startedAt=${startedAt}`, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/octet-stream', 'ngrok-skip-browser-warning': '1' }, body: blob });
+      toast(r.ok ? 'Recording shared. See 🎞 Recordings.' : 'Upload failed.');
+    }
   }
   return { start, stop };
 })();
